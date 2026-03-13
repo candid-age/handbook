@@ -10,7 +10,6 @@ export const parseGraphDOT = (
 ) => {
   const graph: Graph = fromDot(dotString || 'digraph{}');
 
-  let forNodeId = -1;
 
   const nodes: GraphNode[] = [];
 
@@ -23,9 +22,6 @@ export const parseGraphDOT = (
 
     if (forKey !== pubkey && rankingFilter / 100 > ranking) return;
 
-    if (forKey === pubkey) {
-      forNodeId = node.id;
-    }
 
     nodes.push({
       id: node.id,
