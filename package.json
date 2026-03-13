@@ -1,0 +1,41 @@
+{
+  "name": "timeline",
+  "version": "0.1.0",
+  "homepage": "https://candidspaces.github.io/timeline",
+  "private": true,
+  "dependencies": {
+    "@ionic/react": "^8.5.4",
+    "epoch-timeago": "^1.1.9",
+    "js-sha3": "^0.9.3",
+    "ngraph.fromdot": "^7.0.0",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "react-use-websocket": "^4.3.1"
+  },
+  "scripts": {
+    "predeploy": "npm run build",
+    "deploy": "gh-pages -d dist",
+    "dev": "vite",
+    "start": "vite",
+    "build": "tsc -b && vite build",
+    "test": "vitest",
+    "test:run": "vitest run",
+    "preview": "vite preview"
+  },
+  "devDependencies": {
+    "@babel/plugin-proposal-private-property-in-object": "^7.21.11",
+    "@testing-library/jest-dom": "^6.6.3",
+    "@testing-library/react": "^16.3.0",
+    "@testing-library/user-event": "^14.6.1",
+    "@types/jest": "^29.5.14",
+    "@types/node": "^22.15.3",
+    "@types/react": "^18.3.21",
+    "@types/react-dom": "^18.0.11",
+    "@vitejs/plugin-react": "^4.7.0",
+    "gh-pages": "^5.0.0",
+    "jsdom": "^25.0.1",
+    "typescript": "^5.6.3",
+    "vite": "^5.4.19",
+    "vitest": "^2.1.9"
+  }
+}
