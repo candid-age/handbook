@@ -97,6 +97,8 @@ export const transactionID = (transaction: Transaction) => {
     nonce: transaction.nonce,
     from: transaction.from,
     to: transaction.to,
+    amount: transaction.amount,
+    fee: transaction.fee,
     memo: transaction.memo,
     series: transaction.series,
   };
