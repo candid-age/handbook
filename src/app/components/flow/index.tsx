@@ -1,13 +1,4 @@
-import {
-  useCallback,
-  useContext,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from 'react';
-import { createPortal } from 'react-dom';
+import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import {
   IonBadge,
   IonButton,
@@ -21,14 +12,7 @@ import {
   IonList,
   IonRange,
   useIonModal,
-  useIonViewWillEnter,
-  useIonViewWillLeave,
 } from '@ionic/react';
-import ForceGraph3D from 'react-force-graph-3d';
-import {
-  CSS2DRenderer,
-  CSS2DObject,
-} from 'three/examples/jsm/renderers/CSS2DRenderer';
 import { useKeyDetails } from '../keyChip';
 import {
   optionsOutline,
@@ -37,6 +21,7 @@ import {
   discOutline,
   sunnyOutline,
   chevronExpandOutline,
+  arrowRedoOutline,
 } from 'ionicons/icons';
 import { AppContext } from '../../utils/appContext';
 import { shortenB64 } from '../../utils/compat';
@@ -44,8 +29,14 @@ import { GraphLink, GraphNode } from '../../utils/appTypes';
 import Sequence from '../../modals/sequence';
 import Assert from '../../modals/assert';
 
-const NODE_R = 3;
-const extraRenderers = [new CSS2DRenderer()];
+const MAX_TREE_DEPTH = 8;
+
+interface TreeNode {
+  node: GraphNode;
+  incoming: GraphLink[];
+  outgoing: GraphLink[];
+  children: TreeNode[];
+}
 
 function FlowMap({
   forKey,
@@ -73,7 +64,7 @@ function FlowMap({
   });
 
   const handleNodeFocus = useCallback(
-    (node: any, clicked: boolean = false) => {
+    (node: GraphNode | null | undefined, clicked: boolean = false) => {
       if (node?.pubkey === forKey && clicked) {
         presentKV({
           initialBreakpoint: 0.75,
@@ -82,8 +73,8 @@ function FlowMap({
       } else {
         if (node?.id === -1) {
           presentPointModal();
-        } else {
-          setForKey(node?.pubkey);
+        } else if (node?.pubkey) {
+          setForKey(node.pubkey);
         }
       }
     },
@@ -98,13 +89,6 @@ function FlowMap({
   useEffect(() => {
     handleNodeFocus(initialNode);
   }, [initialNode, handleNodeFocus]);
-
-  const forceRef = useRef<any>();
-
-  const maxWeight = useMemo(
-    () => Math.max(...links.map((l) => l.value)),
-    [links],
-  );
 
   const [present, dismiss] = useIonModal(Filters, {
     onDismiss: () => dismiss(),
@@ -130,126 +114,118 @@ function FlowMap({
     }
   };
 
-  const placeholderRef = useRef<HTMLDivElement>(null);
-  const [rect, setRect] = useState<DOMRect | null>(null);
+  const [collapsedToImmediate, setCollapsedToImmediate] = useState(false);
 
-  // Update rect on mount and when window resizes
-  useLayoutEffect(() => {
-    function updateRect() {
-      if (placeholderRef.current) {
-        setRect(placeholderRef.current.getBoundingClientRect());
-      }
-    }
-    updateRect();
-    window.addEventListener('resize', updateRect);
-    return () => window.removeEventListener('resize', updateRect);
-  }, []);
-
-  // Force a re-measure after initial paint
-  useEffect(() => {
-    setTimeout(() => {
-      if (placeholderRef.current) {
-        setRect(placeholderRef.current.getBoundingClientRect());
-      }
-    }, 0);
-  }, []);
-
-  useIonViewWillEnter(() => {
-    const container = document.getElementById('fg-portal');
-    if (container !== null) {
-      container.style.display = 'block'; // Show portal container
-    }
-  }, []);
-
-  useIonViewWillLeave(() => {
-    const container = document.getElementById('fg-portal');
-    if (container !== null) {
-      container.style.display = 'none'; // Remove portal container
-    }
-  }, []);
-
-  const [data, setData] = useState<{ nodes: GraphNode[]; links: GraphLink[] }>({
+  const [visibleData, setVisibleData] = useState<{
+    nodes: GraphNode[];
+    links: GraphLink[];
+  }>({
     nodes: [],
     links: [],
   });
 
-  /*
-  const resetNodes = () => {
-    setData({
-      nodes: initialNode ? [initialNode] : [],
-      links: [],
-    });
-  };
+  const buildTree = useCallback(
+    (
+      currentNode: GraphNode,
+      depth: number,
+      path: Set<number>,
+      sourceMap: Map<number, GraphLink[]>,
+      targetMap: Map<number, GraphLink[]>,
+      nodeMap: Map<number, GraphNode>,
+    ): TreeNode => {
+      const outgoing = sourceMap.get(currentNode.id) ?? [];
+      const incoming = targetMap.get(currentNode.id) ?? [];
 
-  const iterateNodes = useCallback(() => {
-    setData((dt) => {
-      // Find the next link not already in dt.links, ordered by height then time
-      const existingLinks = new Set(
-        dt.links.map((l) => `${l.source}-${l.target}`),
-      );
-      const sortedLinks = [...links].sort((a, b) =>
-        a.height !== b.height ? a.height - b.height : a.time - b.time,
-      );
-      const nextLink = sortedLinks.find(
-        (l) => !existingLinks.has(`${l.source}-${l.target}`),
-      );
-      if (!nextLink) return dt; // All links already added
-
-      // Add source and target nodes if not already present
-      const existingNodeIds = new Set(dt.nodes.map((n) => n.id));
-      const newNodes = [];
-      const sourceNode = nodes.find((n) => n.id === nextLink.source);
-      const targetNode = nodes.find((n) => n.id === nextLink.target);
-      if (sourceNode && !existingNodeIds.has(sourceNode.id))
-        newNodes.push(sourceNode);
-      if (targetNode && !existingNodeIds.has(targetNode.id))
-        newNodes.push(targetNode);
-
-      return {
-        nodes: [...dt.nodes, ...newNodes],
-        links: [...dt.links, nextLink],
-      };
-    });
-  }, [nodes, links]);
-*/
-
-  const deflateNodes = () => {
-    setData(() => {
-      // Find the latest incoming link to initialNode, ordered by height then time
-      const incomingLinks = links
-        .filter((l) => l.target === initialNode?.id)
-        .sort((a, b) =>
-          a.height !== b.height ? b.height - a.height : b.time - a.time,
-        );
-      const latestLink = incomingLinks[0];
-
-      if (!latestLink || !initialNode) {
+      if (depth >= MAX_TREE_DEPTH) {
         return {
-          nodes: initialNode ? [initialNode] : [],
-          links: [],
+          node: currentNode,
+          outgoing,
+          incoming,
+          children: [],
         };
       }
 
-      // Find the source node for the latest link
-      const sourceNode = nodes.find((n) => n.id === latestLink.source);
+      const children = outgoing
+        .map((link) => nodeMap.get(link.target))
+        .filter((candidate): candidate is GraphNode => {
+          return Boolean(candidate && !path.has(candidate.id));
+        })
+        .map((candidate) => {
+          const nextPath = new Set(path);
+          nextPath.add(candidate.id);
+          return buildTree(
+            candidate,
+            depth + 1,
+            nextPath,
+            sourceMap,
+            targetMap,
+            nodeMap,
+          );
+        });
 
       return {
-        nodes: sourceNode ? [sourceNode, initialNode] : [initialNode],
-        links: [latestLink],
+        node: currentNode,
+        outgoing,
+        incoming,
+        children,
       };
-    });
-  };
+    },
+    [],
+  );
 
-  const inflateNodes = useCallback(() => {
-    setData({
+  const rootTree = useMemo(() => {
+    if (!initialNode) {
+      return null;
+    }
+
+    const sourceMap = new Map<number, GraphLink[]>();
+    const targetMap = new Map<number, GraphLink[]>();
+    const nodeMap = new Map<number, GraphNode>(nodes.map((node) => [node.id, node]));
+
+    for (const link of visibleData.links) {
+      sourceMap.set(link.source, [...(sourceMap.get(link.source) ?? []), link]);
+      targetMap.set(link.target, [...(targetMap.get(link.target) ?? []), link]);
+    }
+
+    return buildTree(
+      initialNode,
+      0,
+      new Set<number>([initialNode.id]),
+      sourceMap,
+      targetMap,
+      nodeMap,
+    );
+  }, [buildTree, initialNode, nodes, visibleData.links]);
+
+  useEffect(() => {
+    if (!initialNode) {
+      setVisibleData({ nodes: [], links: [] });
+      return;
+    }
+
+    if (collapsedToImmediate) {
+      const immediateLinks = links.filter(
+        (link) => link.source === initialNode.id || link.target === initialNode.id,
+      );
+
+      const immediateNodeIds = new Set<number>([
+        initialNode.id,
+        ...immediateLinks.map((link) => link.source),
+        ...immediateLinks.map((link) => link.target),
+      ]);
+
+      setVisibleData({
+        nodes: nodes.filter((node) => immediateNodeIds.has(node.id)),
+        links: immediateLinks,
+      });
+      return;
+    }
+
+    setVisibleData({
       nodes,
       links,
     });
-  }, [nodes, links, setData]);
-
-  useEffect(() => {
-    inflateNodes();
-  }, [inflateNodes]);
+  }, [collapsedToImmediate, initialNode, links, nodes]);
 
   return (
     <IonCard>
@@ -313,7 +289,7 @@ function FlowMap({
               icon={addCircleOutline}
             />
           </IonButton>
-          <IonButton onClick={() => deflateNodes()} fill="clear">
+          <IonButton onClick={() => setCollapsedToImmediate(true)} fill="clear">
             <IonIcon
               className="ion-no-padding"
               color="primary"
@@ -321,7 +297,7 @@ function FlowMap({
               icon={discOutline}
             />
           </IonButton>
-          <IonButton onClick={() => inflateNodes()} fill="clear">
+          <IonButton onClick={() => setCollapsedToImmediate(false)} fill="clear">
             <IonIcon
               className="ion-no-padding"
               color="primary"
@@ -331,95 +307,93 @@ function FlowMap({
           </IonButton>
         </IonCardSubtitle>
       </IonCardHeader>
-      <IonCardContent className="ion-no-padding">
-        <div
-          ref={placeholderRef}
-          className="flow-graph-container"
-          style={{
-            width: '100%',
-            height: 'calc(100vh - 220px)',
-            position: 'relative',
-            zIndex: 1,
-            background: 'transparent',
-          }}
-        />
-        {rect
-          ? createPortal(
-              <div
-                style={{
-                  position: 'fixed',
-                  left: rect.left,
-                  top: rect.top,
-                  width: rect.width,
-                  height: rect.height,
-                  pointerEvents: 'auto',
-                }}
-              >
-                <ForceGraph3D
-                  ref={forceRef}
-                  nodeRelSize={NODE_R}
-                  extraRenderers={extraRenderers}
-                  width={rect.width}
-                  height={rect.height}
-                  graphData={JSON.parse(JSON.stringify(data))}
-                  linkWidth={(link) => 1}
-                  linkDirectionalParticles={(link) =>
-                    scaleEdgeWeight(link.value, maxWeight) * 5
-                  }
-                  linkDirectionalParticleSpeed={(link) =>
-                    scaleEdgeWeight(link.value, maxWeight) * 0.01
-                  }
-                  nodeThreeObject={(node) => {
-                    let parent = null;
-
-                    if (node.id === initialNode?.id || node.id === -1) {
-                      const icon = document.createElement('ion-icon');
-                      icon.slot = 'end';
-                      icon.icon =
-                        node.id === -1
-                          ? addCircleOutline
-                          : chevronExpandOutline;
-
-                      const par = document.createElement('ion-button');
-                      par.appendChild(icon);
-
-                      par.size = 'small';
-                      par.style.textTransform = 'none';
-
-                      par.color = node.id === -1 ? 'danger' : 'primary';
-
-                      parent = par;
-                    } else {
-                      parent = document.createElement('ion-badge');
-                      parent.color = 'tertiary';
-                    }
-
-                    parent.addEventListener('click', function (e) {
-                      e.stopPropagation();
-                      handleNodeFocus(node, true);
-                    });
-                    parent.style.cursor = 'pointer';
-                    parent.style.pointerEvents = 'auto'; // Ensure element is clickable
-
-                    const nodeEl = document.createElement('code');
-                    nodeEl.textContent = node.label || shortenB64(node.pubkey);
-
-                    parent.appendChild(nodeEl);
-                    return new CSS2DObject(parent);
-                  }}
-                  nodeThreeObjectExtend={true}
-                />
-              </div>,
-              document.getElementById('fg-portal')!,
-            )
-          : null}
+      <IonCardContent>
+        {!rootTree && <p>No graph data available for this key.</p>}
+        {rootTree && (
+          <TreeBranch
+            branch={rootTree}
+            isRoot={true}
+            onNodeClick={(node) => handleNodeFocus(node, true)}
+            currentKey={forKey}
+          />
+        )}
       </IonCardContent>
     </IonCard>
   );
 }
 
-const scaleEdgeWeight = (weight: number, maxWeight: number) => {
-  return Math.log2(2 + weight) / Math.log2(2 + maxWeight);
+const TreeBranch = ({
+  branch,
+  onNodeClick,
+  currentKey,
+  isRoot = false,
+}: {
+  branch: TreeNode;
+  onNodeClick: (node: GraphNode) => void;
+  currentKey: string;
+  isRoot?: boolean;
+}) => {
+  const [expanded, setExpanded] = useState(true);
+
+  const isCurrent = branch.node.pubkey === currentKey;
+
+  return (
+    <div
+      style={{
+        borderLeft: isRoot ? 'none' : '1px solid var(--ion-color-medium)',
+        marginLeft: isRoot ? 0 : 8,
+        paddingLeft: isRoot ? 0 : 12,
+        marginBottom: 8,
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          alignItems: 'center',
+          gap: 8,
+        }}
+      >
+        <IonButton size="small" fill={isCurrent ? 'solid' : 'outline'} onClick={() => onNodeClick(branch.node)}>
+          <IonIcon icon={isCurrent ? chevronExpandOutline : arrowRedoOutline} slot="start" />
+          <code>{branch.node.label || shortenB64(branch.node.pubkey)}</code>
+        </IonButton>
+        <IonBadge color="tertiary">incoming: {branch.incoming.length}</IonBadge>
+        <IonBadge color="secondary">outgoing: {branch.outgoing.length}</IonBadge>
+        {branch.children.length > 0 && (
+          <IonButton size="small" fill="clear" onClick={() => setExpanded((state) => !state)}>
+            {expanded ? 'Collapse' : 'Expand'} {branch.children.length}
+          </IonButton>
+        )}
+      </div>
+
+      {expanded && branch.outgoing.length > 0 && (
+        <IonList inset={true}>
+          {branch.outgoing.map((edge, edgeIndex) => (
+            <IonItem key={`${branch.node.id}-${edge.target}-${edge.height}-${edgeIndex}`} lines="none">
+              <IonBadge color="medium">to #{edge.target}</IonBadge>
+              <IonBadge color="light">weight: {edge.value}</IonBadge>
+              <IonBadge color="light">height: {edge.height}</IonBadge>
+              <IonBadge color="light">time: {edge.time}</IonBadge>
+            </IonItem>
+          ))}
+        </IonList>
+      )}
+
+      {expanded && branch.children.length > 0 && (
+        <div style={{ marginTop: 4 }}>
+          {branch.children.map((child) => (
+            <TreeBranch
+              key={`${branch.node.id}-${child.node.id}`}
+              branch={child}
+              onNodeClick={onNodeClick}
+              currentKey={currentKey}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
 };
 
 export default FlowMap;
@@ -429,7 +403,7 @@ export const Filters = ({
   value,
 }: {
   onDismiss: () => void;
-  value: string;
+  value: number;
 }) => {
   const { rankingFilter, setRankingFilter } = useContext(AppContext);
 
@@ -447,16 +421,10 @@ export const Filters = ({
             value={rankingFilter}
           />
         </IonItem>
-        {/* <IonItem>
-          <IonToggle>Toggle inflow/outflow</IonToggle>
-        </IonItem>
-        <IonItem>
-          <IonToggle>Toggle snapshots</IonToggle>
-        </IonItem>
-        <IonItem>
-          <IonToggle>Toggle knowledge/flow trees</IonToggle>
-        </IonItem> */}
       </IonList>
+      <IonButton expand="block" onClick={onDismiss}>
+        Done
+      </IonButton>
     </div>
   );
 };

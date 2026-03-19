@@ -439,7 +439,6 @@ const App: React.FC = () => {
     <AppContext.Provider value={appState}>
       <IonApp>
         <Explorer />
-        <div id="fg-portal"></div>
       </IonApp>
     </AppContext.Provider>
   );
