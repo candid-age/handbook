@@ -1,4 +1,4 @@
-import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import {
   IonBadge,
   IonButton,
@@ -63,6 +63,138 @@ const trimPubkeyDisplay = (value: string) => {
   return trimmedValue.length > 0 ? trimmedValue : value;
 };
 
+const normalizePath = (value: string) => {
+  const stripped = value.trim().replace(/^https?:\/\//, '');
+
+  if (!stripped) {
+    return '/';
+  }
+
+  const withLeadingSlash = stripped.startsWith('/') ? stripped : `/${stripped}`;
+  return withLeadingSlash.replace(/\/{2,}/g, '/');
+};
+
+const PathAddressBar = ({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+}) => {
+  const [isEditing, setIsEditing] = useState(false);
+  const [draftPath, setDraftPath] = useState(value);
+  const inputRef = useRef<HTMLIonInputElement | null>(null);
+
+  useEffect(() => {
+    setDraftPath(value);
+  }, [value]);
+
+  useEffect(() => {
+    if (!isEditing) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      inputRef.current?.setFocus();
+    }, 0);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [isEditing]);
+
+  const breadcrumbParts = useMemo(() => {
+    if (value === '/') {
+      return [];
+    }
+
+    return value.split('/').filter(Boolean);
+  }, [value]);
+
+  const onCommit = useCallback(() => {
+    onChange(draftPath);
+    setIsEditing(false);
+  }, [draftPath, onChange]);
+
+  return (
+    <div
+      style={{
+        border: '1px solid var(--ion-color-medium)',
+        borderRadius: '12px',
+        minHeight: '44px',
+        padding: '8px 10px',
+      }}
+      onClick={() => setIsEditing(true)}
+      role="button"
+      aria-label="address-bar"
+    >
+      {isEditing ? (
+        <IonInput
+          ref={inputRef}
+          style={{ fontFamily: 'monospace, monospace' }}
+          value={draftPath}
+          placeholder="/"
+          onIonInput={(event) => setDraftPath(event.detail.value ?? '')}
+          onIonBlur={onCommit}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') {
+              onCommit();
+            }
+          }}
+        />
+      ) : (
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            flexWrap: 'wrap',
+            gap: '4px',
+            fontFamily: 'monospace, monospace',
+          }}
+        >
+          <button
+            type="button"
+            style={{
+              border: 0,
+              padding: 0,
+              background: 'transparent',
+              color: 'var(--ion-color-primary)',
+              cursor: 'pointer',
+            }}
+            onClick={(event) => {
+              event.stopPropagation();
+              onChange('/');
+            }}
+          >
+            /
+          </button>
+          {breadcrumbParts.map((part, index) => (
+            <div key={`${part}-${index}`} style={{ display: 'flex', alignItems: 'center' }}>
+              <span>/</span>
+              <button
+                type="button"
+                style={{
+                  border: 0,
+                  padding: 0,
+                  marginLeft: '4px',
+                  background: 'transparent',
+                  color: 'var(--ion-color-primary)',
+                  cursor: 'pointer',
+                }}
+                onClick={(event) => {
+                  event.stopPropagation();
+                  const nextPath = `/${breadcrumbParts.slice(0, index + 1).join('/')}`;
+                  onChange(nextPath);
+                }}
+              >
+                {part}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
 function FlowMap({
   forKey,
   setForKey,
@@ -120,24 +252,21 @@ function FlowMap({
     value: rankingFilter,
   });
 
-  const handleSearch = (ev: Event) => {
-    const target = ev.target as HTMLIonSearchbarElement;
-    if (!target) return;
+  const handlePathChange = useCallback(
+    (value: string) => {
+      setForKey(normalizePath(value));
+    },
+    [setForKey],
+  );
 
-    const value = target.value!;
-
-    if (!value) {
-      return;
+  const displayedPath = useMemo(() => {
+    const trimmed = (forKey ?? '').trim();
+    if (!trimmed || !trimmed.startsWith('/')) {
+      return '/';
     }
 
-    if (new RegExp('[A-Za-z0-9/+]{43}=').test(value)) {
-      setForKey(value);
-    } else {
-      //remove non Base64 characters eg: @&!; etc and pad with 00000
-      const query = `${value.replace(/[^A-Za-z0-9/+]/gi, '').padEnd(43, '0')}=`;
-      setForKey(query);
-    }
-  };
+    return normalizePath(trimmed);
+  }, [forKey]);
 
   const [collapsedToImmediate, setCollapsedToImmediate] = useState(false);
 
@@ -270,21 +399,13 @@ function FlowMap({
       <IonCardHeader className="ion-padding-horizontal">
         <IonCardSubtitle
           style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
+            display: 'grid',
+            gap: '8px',
           }}
         >
-          <IonInput
-            style={{ fontFamily: 'monospace, monospace', minHeight: '30px' }}
-            aria-label="for-key"
-            type="url"
-            enterkeyhint="go"
-            fill="outline"
-            clearOnEdit={true}
-            debounce={1000}
-            value={forKey}
-            onIonChange={(ev) => handleSearch(ev)}
+          <PathAddressBar
+            value={displayedPath}
+            onChange={handlePathChange}
           />
         </IonCardSubtitle>
         <IonCardSubtitle className="ion-no-padding">
