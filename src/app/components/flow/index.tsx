@@ -1,4 +1,4 @@
-import { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import {
   IonBadge,
   IonButton,
@@ -63,160 +63,6 @@ const trimPubkeyDisplay = (value: string) => {
   return trimmedValue.length > 0 ? trimmedValue : value;
 };
 
-const MAX_PATH_PAYLOAD_LENGTH = 44;
-const PAD_PATTERN = '/00000000';
-const BASE64_PATH_INPUT_PATTERN = /[^A-Za-z0-9+/=]/g;
-
-const sanitizePathInput = (value: string) => {
-  const withoutProtocol = value.trim().replace(/^https?:\/\//, '');
-  const stripped = withoutProtocol.replace(/^\/+/, '');
-  const normalizedSlashes = stripped.replace(/\/{2,}/g, '/');
-  const allowedOnly = normalizedSlashes.replace(BASE64_PATH_INPUT_PATTERN, '');
-  const withoutTrailingPad = allowedOnly.replace(/[0=]+$/g, '').replace(/\/+$/g, '');
-  return withoutTrailingPad.slice(0, MAX_PATH_PAYLOAD_LENGTH);
-};
-
-const toResolvedPath = (value: string) => {
-  const seed = sanitizePathInput(value);
-  let payload = seed;
-
-  while (payload.length < MAX_PATH_PAYLOAD_LENGTH - 1) {
-    payload += PAD_PATTERN;
-  }
-
-  payload = payload.slice(0, MAX_PATH_PAYLOAD_LENGTH - 1);
-  return `/${payload}=`;
-};
-
-const toDisplayPath = (value?: string) => {
-  const resolved = toResolvedPath(value ?? '/');
-  const visible = resolved.slice(1).replace(/[0=]+$/g, '').replace(/\/+$/g, '');
-  return visible ? `/${visible}` : '/';
-};
-
-const PathAddressBar = ({
-  value,
-  onChange,
-}: {
-  value: string;
-  onChange: (value: string) => void;
-}) => {
-  const [isEditing, setIsEditing] = useState(false);
-  const [draftPath, setDraftPath] = useState(value);
-  const inputRef = useRef<HTMLIonInputElement | null>(null);
-
-  useEffect(() => {
-    setDraftPath(value);
-  }, [value]);
-
-  useEffect(() => {
-    if (!isEditing) {
-      return;
-    }
-
-    const timeoutId = window.setTimeout(() => {
-      inputRef.current?.setFocus();
-    }, 0);
-
-    return () => window.clearTimeout(timeoutId);
-  }, [isEditing]);
-
-  const breadcrumbParts = useMemo(() => {
-    const visible = toDisplayPath(value);
-    if (visible === '/') {
-      return [];
-    }
-
-    return visible.split('/').filter(Boolean);
-  }, [value]);
-
-  const onCommit = useCallback(() => {
-    onChange(draftPath);
-    setIsEditing(false);
-  }, [draftPath, onChange]);
-
-  return (
-    <div
-      style={{
-        border: '1px solid var(--ion-color-medium)',
-        borderRadius: '12px',
-        minHeight: '44px',
-        padding: '8px 10px',
-      }}
-      onClick={() => setIsEditing(true)}
-      role="button"
-      aria-label="address-bar"
-    >
-      {isEditing ? (
-        <IonInput
-          ref={inputRef}
-          style={{ fontFamily: 'monospace, monospace' }}
-          value={draftPath}
-          placeholder="/"
-          maxlength={MAX_PATH_PAYLOAD_LENGTH}
-          onIonInput={(event) => setDraftPath(event.detail.value ?? '')}
-          onIonBlur={onCommit}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') {
-              onCommit();
-            }
-          }}
-        />
-      ) : (
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            flexWrap: 'wrap',
-            gap: '4px',
-            fontFamily: 'monospace, monospace',
-          }}
-        >
-          <button
-            type="button"
-            style={{
-              border: 0,
-              padding: 0,
-              background: 'transparent',
-              color: 'var(--ion-color-primary)',
-              cursor: 'pointer',
-            }}
-            onClick={(event) => {
-              event.stopPropagation();
-              onChange('/');
-            }}
-          >
-            /
-          </button>
-          {breadcrumbParts.map((part, index) => (
-            <div key={`${part}-${index}`} style={{ display: 'flex', alignItems: 'center' }}>
-              <span>/</span>
-              <button
-                type="button"
-                style={{
-                  border: 0,
-                  padding: 0,
-                  marginLeft: '4px',
-                  background: 'transparent',
-                  color: 'var(--ion-color-primary)',
-                  cursor: 'pointer',
-                }}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  const nextPath = `/${breadcrumbParts.slice(0, index + 1).join('/')}`;
-                  onChange(nextPath);
-                }}
-              >
-                {part}
-              </button>
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-};
-
 function FlowMap({
   forKey,
   setForKey,
@@ -274,16 +120,24 @@ function FlowMap({
     value: rankingFilter,
   });
 
-  const handlePathChange = useCallback(
-    (value: string) => {
-      setForKey(toResolvedPath(value));
-    },
-    [setForKey],
-  );
+  const handleSearch = (ev: Event) => {
+    const target = ev.target as HTMLIonSearchbarElement;
+    if (!target) return;
 
-  const displayedPath = useMemo(() => {
-    return toDisplayPath(forKey);
-  }, [forKey]);
+    const value = target.value!;
+
+    if (!value) {
+      return;
+    }
+
+    if (new RegExp('[A-Za-z0-9/+]{43}=').test(value)) {
+      setForKey(value);
+    } else {
+      //remove non Base64 characters eg: @&!; etc and pad with 00000
+      const query = `${value.replace(/[^A-Za-z0-9/+]/gi, '').padEnd(43, '0')}=`;
+      setForKey(query);
+    }
+  };
 
   const [collapsedToImmediate, setCollapsedToImmediate] = useState(false);
 
@@ -416,13 +270,21 @@ function FlowMap({
       <IonCardHeader className="ion-padding-horizontal">
         <IonCardSubtitle
           style={{
-            display: 'grid',
-            gap: '8px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
           }}
         >
-          <PathAddressBar
-            value={displayedPath}
-            onChange={handlePathChange}
+          <IonInput
+            style={{ fontFamily: 'monospace, monospace', minHeight: '30px' }}
+            aria-label="for-key"
+            type="url"
+            enterkeyhint="go"
+            fill="outline"
+            clearOnEdit={true}
+            debounce={1000}
+            value={forKey}
+            onIonChange={(ev) => handleSearch(ev)}
           />
         </IonCardSubtitle>
         <IonCardSubtitle className="ion-no-padding">
