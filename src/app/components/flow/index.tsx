@@ -63,6 +63,23 @@ const trimPubkeyDisplay = (value: string) => {
   return trimmedValue.length > 0 ? trimmedValue : value;
 };
 
+const buildPathSegments = (value: string) => {
+  if (!isValidAbsolutePath(value) || value === '/') {
+    return [];
+  }
+
+  const parts = value.split('/').filter(Boolean);
+  let currentPath = '';
+
+  return parts.map((segment) => {
+    currentPath = `${currentPath}/${segment}`;
+    return {
+      label: segment,
+      value: currentPath,
+    };
+  });
+};
+
 function FlowMap({
   forKey,
   setForKey,
@@ -124,7 +141,15 @@ function FlowMap({
     const target = ev.target as HTMLIonSearchbarElement;
     if (!target) return;
 
-    const value = target.value!;
+    const value = target.value ?? '';
+
+    handleSearchValue(value);
+  };
+
+  const handleSearchValue = (value: string) => {
+    if (value === null || value === undefined) {
+      return;
+    }
 
     if (!value) {
       return;
@@ -138,6 +163,16 @@ function FlowMap({
       setForKey(query);
     }
   };
+
+  const [inputFocused, setInputFocused] = useState(false);
+
+  const clickableSegments = useMemo(() => {
+    if (inputFocused) {
+      return [];
+    }
+
+    return buildPathSegments(forKey);
+  }, [forKey, inputFocused]);
 
   const [collapsedToImmediate, setCollapsedToImmediate] = useState(false);
 
@@ -285,7 +320,42 @@ function FlowMap({
             debounce={1000}
             value={forKey}
             onIonChange={(ev) => handleSearch(ev)}
+            onIonFocus={() => setInputFocused(true)}
+            onIonBlur={() => setInputFocused(false)}
           />
+          {clickableSegments.length > 0 && (
+            <div
+              style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                alignItems: 'center',
+                gap: 6,
+                marginTop: 8,
+                fontFamily: 'monospace, monospace',
+              }}
+            >
+              {clickableSegments.map((segment, index) => (
+                <div key={segment.value} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <button
+                    type="button"
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={() => handleSearchValue(segment.value)}
+                    style={{
+                      border: '1px solid var(--ion-color-medium)',
+                      borderRadius: 6,
+                      background: 'var(--ion-card-background)',
+                      color: 'var(--ion-text-color)',
+                      padding: '2px 8px',
+                      cursor: 'pointer',
+                    }}
+                  >
+                    {segment.label}
+                  </button>
+                  {index < clickableSegments.length - 1 && <code>/</code>}
+                </div>
+              ))}
+            </div>
+          )}
         </IonCardSubtitle>
         <IonCardSubtitle className="ion-no-padding">
           <IonButton
