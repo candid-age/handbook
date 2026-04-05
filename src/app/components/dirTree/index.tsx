@@ -13,7 +13,11 @@ import {
   IonModal,
   IonToolbar,
   IonPage,
+  IonText,
+  IonTitle,
+  IonIcon,
 } from '@ionic/react';
+import { documentTextOutline, linkOutline, logoYoutube } from 'ionicons/icons';
 import { GraphLink, GraphNode } from '../../utils/appTypes';
 
 const MAX_TREE_DEPTH = 8;
@@ -24,6 +28,11 @@ interface TreeNode {
   outgoing: GraphLink[];
   children: TreeNode[];
 }
+
+type MemoContent =
+  | { type: 'youtube'; videoId: string }
+  | { type: 'url'; url: string }
+  | { type: 'text'; text: string };
 
 const isValidAbsolutePath = (value?: string) => {
   if (!value || !value.startsWith('/')) {
@@ -104,13 +113,103 @@ const getYouTubeVideoId = (value?: string) => {
   }
 };
 
-const YouTubeShortModal = ({
+const getMemoContent = (memo?: string): MemoContent | null => {
+  const trimmedMemo = memo?.trim();
+  if (!trimmedMemo) {
+    return null;
+  }
+
+  const youtubeVideoId = getYouTubeVideoId(trimmedMemo);
+  if (youtubeVideoId) {
+    return {
+      type: 'youtube',
+      videoId: youtubeVideoId,
+    };
+  }
+
+  try {
+    const parsedUrl = new URL(trimmedMemo);
+    if (parsedUrl.protocol === 'http:' || parsedUrl.protocol === 'https:') {
+      return {
+        type: 'url',
+        url: parsedUrl.toString(),
+      };
+    }
+  } catch {
+    // fall back to plain text rendering
+  }
+
+  return {
+    type: 'text',
+    text: trimmedMemo,
+  };
+};
+
+const getMemoIcon = (memoContent: MemoContent | null) => {
+  if (!memoContent) {
+    return null;
+  }
+
+  if (memoContent.type === 'youtube') {
+    return logoYoutube;
+  }
+
+  if (memoContent.type === 'url') {
+    return linkOutline;
+  }
+
+  return documentTextOutline;
+};
+
+const MemoModal = ({
   onDismiss,
-  videoId,
+  content,
 }: {
   onDismiss: () => void;
-  videoId: string;
+  content: MemoContent;
 }) => {
+  const renderMemoContent = () => {
+    if (content.type === 'youtube') {
+      return (
+        <div style={{ position: 'relative', width: '100%', paddingBottom: '177.78%' }}>
+          <iframe
+            title="Memo YouTube short"
+            src={`https://www.youtube.com/embed/${content.videoId}?autoplay=1&playsinline=1`}
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 0,
+              width: '100%',
+              height: '100%',
+              border: 'none',
+            }}
+            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+            referrerPolicy="strict-origin-when-cross-origin"
+            allowFullScreen
+          />
+        </div>
+      );
+    }
+
+    if (content.type === 'url') {
+      return (
+        <iframe
+          title="Memo web content"
+          src={content.url}
+          style={{ width: '100%', height: '75vh', border: 'none', borderRadius: 8 }}
+          referrerPolicy="strict-origin-when-cross-origin"
+          sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
+        />
+      );
+    }
+
+    return (
+      <IonText>
+        <p style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{content.text}</p>
+      </IonText>
+    );
+  };
+
   return (
     <IonPage>
       <IonHeader>
@@ -120,29 +219,12 @@ const YouTubeShortModal = ({
               Close
             </IonButton>
           </IonButtons>
+          <IonTitle>Memo</IonTitle>
         </IonToolbar>
       </IonHeader>
-      <IonContent>
+      <IonContent className="ion-padding">
         <IonCard>
-          <IonCardContent>
-            <div style={{ position: 'relative', width: '100%', paddingBottom: '177.78%' }}>
-              <iframe
-                title="Memo YouTube video"
-                src={`https://www.youtube.com/embed/${videoId}`}
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  width: '100%',
-                  height: '100%',
-                  border: 'none',
-                }}
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                referrerPolicy="strict-origin-when-cross-origin"
-                allowFullScreen
-              />
-            </div>
-          </IonCardContent>
+          <IonCardContent>{renderMemoContent()}</IonCardContent>
         </IonCard>
       </IonContent>
     </IonPage>
@@ -376,14 +458,11 @@ const TreeBranch = ({
 
   const trimmedPubkey = toDisplayPath(branch.node.pubkey);
   const isCurrentNode = toDisplayPath(branch.node.pubkey) === toDisplayPath(currentKey);
-  const memoEdges = branch.outgoing.filter((edge) => Boolean(edge.memo?.trim()));
-  const hasMemo = Boolean(branch.node.memo?.trim()) || memoEdges.length > 0;
-  const nodeMemoVideoId = getYouTubeVideoId(branch.node.memo);
-  const [activeVideoId, setActiveVideoId] = useState<string | null>(null);
-
-  const openVideoModal = (videoId: string) => {
-    setActiveVideoId(videoId);
-  };
+  const [activeMemo, setActiveMemo] = useState<MemoContent | null>(null);
+  const memoContent = getMemoContent(branch.node.memo);
+  const memoIcon = getMemoIcon(memoContent);
+  const isCurrentNodeWithoutMemo = isCurrentNode && !memoContent;
+  const isNodeButtonEnabled = !isCurrentNodeWithoutMemo;
 
   return (
     <div
@@ -396,12 +475,16 @@ const TreeBranch = ({
     >
       <IonList inset={true}>
         <IonItem
-          button={true}
+          button={isNodeButtonEnabled}
           detail={true}
+          disabled={!isNodeButtonEnabled}
           color={isCurrentNode ? 'primary' : undefined}
           onClick={() => {
-            if (nodeMemoVideoId) {
-              openVideoModal(nodeMemoVideoId);
+            if (!isNodeButtonEnabled) {
+              return;
+            }
+            if (isCurrentNode && memoContent) {
+              setActiveMemo(memoContent);
               return;
             }
             onNodeClick(branch.node);
@@ -417,37 +500,15 @@ const TreeBranch = ({
           >
             <code style={{ opacity: 0.75 }}>{pathLeafName(trimmedPubkey)}</code>
           </div>
+          {isCurrentNode && memoIcon && (
+            <IonIcon
+              slot="end"
+              icon={memoIcon}
+              aria-label={`Memo ${memoContent?.type ?? 'content'} icon`}
+            />
+          )}
         </IonItem>
       </IonList>
-
-      {hasMemo && (
-        <IonList inset={true}>
-          <IonItem
-            lines="none"
-            button={Boolean(nodeMemoVideoId)}
-            detail={false}
-            onClick={() => nodeMemoVideoId && openVideoModal(nodeMemoVideoId)}
-          >
-            <code>memo: {branch.node.memo}</code>
-          </IonItem>
-          {memoEdges.map((edge, edgeIndex) => (
-            <IonItem
-              key={`${branch.node.id}-${edge.target}-${edge.height}-${edgeIndex}`}
-              lines="none"
-              button={Boolean(getYouTubeVideoId(edge.memo))}
-              detail={false}
-              onClick={() => {
-                const videoId = getYouTubeVideoId(edge.memo);
-                if (videoId) {
-                  openVideoModal(videoId);
-                }
-              }}
-            >
-              <code>memo: {edge.memo}</code>
-            </IonItem>
-          ))}
-        </IonList>
-      )}
 
       {branch.children.length > 0 && (
         <div style={{ marginTop: 4 }}>
@@ -461,11 +522,12 @@ const TreeBranch = ({
           ))}
         </div>
       )}
-      <IonModal isOpen={Boolean(activeVideoId)} onDidDismiss={() => setActiveVideoId(null)}>
-        {activeVideoId && (
-          <YouTubeShortModal
-            onDismiss={() => setActiveVideoId(null)}
-            videoId={activeVideoId}
+
+      <IonModal isOpen={Boolean(activeMemo)} onDidDismiss={() => setActiveMemo(null)}>
+        {activeMemo && (
+          <MemoModal
+            onDismiss={() => setActiveMemo(null)}
+            content={activeMemo}
           />
         )}
       </IonModal>
