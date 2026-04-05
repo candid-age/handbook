@@ -394,7 +394,23 @@ function DirTree({
               minHeight: '30px',
             }}
           >
-            <code style={{ marginRight: 2 }}>/</code>
+            <button
+              type="button"
+              onClick={() => setForKey('/')}
+              style={{
+                border: 'none',
+                background: 'transparent',
+                color: 'var(--ion-color-primary)',
+                padding: 0,
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+                fontSize: 'inherit',
+                textDecoration: 'underline',
+              }}
+            >
+              ..
+            </button>
+            <code>/</code>
             {clickableSegments.map((segment, index) => (
               <div
                 key={segment.value}
@@ -423,9 +439,6 @@ function DirTree({
                 {index < clickableSegments.length - 1 && <code>/</code>}
               </div>
             ))}
-            {clickableSegments.length === 0 && (
-              <code style={{ opacity: 0.75 }}>/</code>
-            )}
           </div>
         </IonCardSubtitle>
       </IonCardHeader>
