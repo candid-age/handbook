@@ -2,7 +2,9 @@ import {
   IonButton,
   IonButtons,
   IonCard,
+  IonCardContent,
   IonCardHeader,
+  IonCardSubtitle,
   IonCardTitle,
   IonContent,
   IonHeader,
@@ -49,10 +51,15 @@ const Navigator = ({
                   icon={sunnyOutline}
                   color="primary"
                 />
-                Content Explorer
+                Candid Handbook
               </div>
             </IonCardTitle>
           </IonCardHeader>
+          <IonCardContent>
+            <IonCardSubtitle>
+              Arise, shine, for your light has come...
+            </IonCardSubtitle>
+          </IonCardContent>
         </IonCard>
       </IonContent>
     </IonPage>

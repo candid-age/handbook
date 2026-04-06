@@ -67,7 +67,7 @@ export const PageShell = ({ onDismissModal, renderBody, tools }: Props) => {
             ) : (
               <IonChip onClick={openModal}>
                 <IonIcon icon={sunnyOutline} color="primary" />
-                <IonLabel>Explorer</IonLabel>
+                <IonLabel>Candid Handbook</IonLabel>
               </IonChip>
             )}
           </IonButtons>
