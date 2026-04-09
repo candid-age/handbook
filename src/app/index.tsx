@@ -24,8 +24,6 @@ import { useState, useEffect } from 'react';
 import { AppContext } from './utils/appContext';
 import {
   Transaction,
-  GraphLink,
-  GraphNode,
   Block,
   BlockIdHeaderPair,
 } from './utils/appTypes';
@@ -36,7 +34,6 @@ import useWebSocket, { ReadyState } from 'react-use-websocket';
 import { signTransaction } from './useCases/useAgent';
 import {
   transactionID,
-  parseGraphDOT,
   socketEventListener,
 } from './utils/compat';
 import { DEFAULT_CRUZBIT_NODE } from './utils/constants';
@@ -64,11 +61,6 @@ const App: React.FC = () => {
 
   const [genesisBlock, setGenesisBlock] =
     usePersistentState<Block | null>('genesis-block', null);
-
-  const [graph, setGraph] = usePersistentState<{
-    nodes: GraphNode[];
-    links: GraphLink[];
-  } | null>('flow-graph', null);
 
   const [rankingFilter, setRankingFilter] = useState(0);
   const [latestSocketResponse, setLatestSocketResponse] = useState<{
@@ -119,9 +111,6 @@ const App: React.FC = () => {
             break;
           case 'tip_header':
             setTipHeader(body);
-            break;
-          case 'graph':
-            setGraph(parseGraphDOT(body.graph, body.public_key, rankingFilter));
             break;
           case 'block':
             if (body.block.header.height === 0) {
@@ -211,20 +200,6 @@ const App: React.FC = () => {
     if (readyState !== ReadyState.OPEN) return;
     sendJsonMessage({ type: 'get_tip_header' });
   }, [readyState, sendJsonMessage]);
-
-  const requestGraph = useCallback(
-    (publicKeyB64: string = '') => {
-      if (readyState !== ReadyState.OPEN) return;
-
-      sendJsonMessage({
-        type: 'get_graph',
-        body: {
-          public_key: publicKeyB64,
-        },
-      });
-    },
-    [readyState, sendJsonMessage],
-  );
 
   const pushTransaction = async (
     to: string,
@@ -382,8 +357,6 @@ const App: React.FC = () => {
     setCurrentBlock,
     genesisBlock,
     setGenesisBlock,
-    requestGraph,
-    graph,
     rankingFilter,
     setRankingFilter,
     pushTransaction,

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import {
   IonButton,
   IonCard,
@@ -18,14 +18,13 @@ import {
   IonIcon,
 } from '@ionic/react';
 import { documentTextOutline, linkOutline, logoYoutube } from 'ionicons/icons';
-import { GraphLink, GraphNode } from '../../utils/appTypes';
+import { Transaction } from '../../utils/appTypes';
 
 const MAX_TREE_DEPTH = 8;
 
 interface TreeNode {
-  node: GraphNode;
-  incoming: GraphLink[];
-  outgoing: GraphLink[];
+  pubkey: string;
+  memo?: string;
   children: TreeNode[];
 }
 
@@ -34,52 +33,18 @@ type MemoContent =
   | { type: 'url'; url: string }
   | { type: 'text'; text: string };
 
-const isValidAbsolutePath = (value?: string) => {
-  if (!value || !value.startsWith('/')) {
-    return false;
-  }
-
-  if (value === '/') {
-    return true;
-  }
-
-  return !value.includes('\0') && !value.includes('//');
-};
-
-const pathLeafName = (value: string) => {
-  if (value === '/') {
-    return '/';
-  }
-
-  const parts = value.split('/').filter(Boolean);
-  return parts.at(-1) ?? value;
-};
-
 const trimPubkeyDisplay = (value: string) => {
   const trimmedValue = value.replace(/0+=+$/g, '');
   return trimmedValue.length > 0 ? trimmedValue : value;
 };
 
-const toDisplayPath = (value: string) => {
-  const trimmed = trimPubkeyDisplay(value);
-  return trimmed || '/';
-};
-
-const buildPathSegments = (value: string) => {
-  if (!isValidAbsolutePath(value) || value === '/') {
-    return [];
+const pathLeafName = (value: string) => {
+  if (!value.includes('/')) {
+    return value;
   }
 
   const parts = value.split('/').filter(Boolean);
-  let currentPath = '/';
-
-  return parts.map((segment) => {
-    currentPath = `${currentPath}${segment}/`;
-    return {
-      label: segment,
-      value: currentPath,
-    };
-  });
+  return parts.at(-1) ?? value;
 };
 
 const getYouTubeVideoId = (value?: string) => {
@@ -234,144 +199,70 @@ const MemoModal = ({
 function DirTree({
   forKey,
   setForKey,
-  nodes,
-  links,
+  transactions,
 }: {
   forKey: string;
   setForKey: (pk: string) => void;
-  nodes: GraphNode[];
-  links: GraphLink[];
-  colorScheme: 'light' | 'dark';
+  transactions: Transaction[];
 }) {
-
-  const handleNodeFocus = useCallback(
-    (node: GraphNode | null | undefined) => {
-      if (node?.pubkey) {
-          setForKey(toDisplayPath(node.pubkey));
-        }
-    },
-    [setForKey],
-  );
-
-  const initialNode = useMemo(() => {
-    const displayKey = toDisplayPath(forKey);
-    const node = nodes.find((n) => toDisplayPath(n.pubkey) === displayKey);
-    return node && isValidAbsolutePath(toDisplayPath(node.pubkey)) ? node : null;
-  }, [nodes, forKey]);
-
-  useEffect(() => {
-    handleNodeFocus(initialNode);
-  }, [initialNode, handleNodeFocus]);
-
-  const clickableSegments = useMemo(() => {
-    return buildPathSegments(toDisplayPath(forKey));
-  }, [forKey]);
-
-  const [visibleData, setVisibleData] = useState<{
-    nodes: GraphNode[];
-    links: GraphLink[];
-  }>({
-    nodes: [],
-    links: [],
-  });
-
-  const buildTree = useCallback(
-    (
-      currentNode: GraphNode,
-      depth: number,
-      path: Set<number>,
-      sourceMap: Map<number, GraphLink[]>,
-      targetMap: Map<number, GraphLink[]>,
-      nodeMap: Map<number, GraphNode>,
-    ): TreeNode => {
-      const outgoing = sourceMap.get(currentNode.id) ?? [];
-      const incoming = targetMap.get(currentNode.id) ?? [];
-
-      if (depth >= MAX_TREE_DEPTH) {
-        return {
-          node: currentNode,
-          outgoing,
-          incoming,
-          children: [],
-        };
-      }
-
-      const children = outgoing
-        .map((link) => nodeMap.get(link.target))
-        .filter((candidate): candidate is GraphNode => {
-          return Boolean(candidate && !path.has(candidate.id));
-        })
-        .map((candidate) => {
-          const nextPath = new Set(path);
-          nextPath.add(candidate.id);
-          return buildTree(
-            candidate,
-            depth + 1,
-            nextPath,
-            sourceMap,
-            targetMap,
-            nodeMap,
-          );
-        });
-
-      return {
-        node: currentNode,
-        outgoing,
-        incoming,
-        children,
-      };
-    },
-    [],
-  );
-
   const rootTree = useMemo(() => {
-    if (!initialNode) {
+    if (!forKey) {
       return null;
     }
 
-    const sourceMap = new Map<number, GraphLink[]>();
-    const targetMap = new Map<number, GraphLink[]>();
-    const nodeMap = new Map<number, GraphNode>(nodes.map((node) => [node.id, node]));
+    const outgoingMap = new Map<string, { to: string; memo?: string }[]>();
 
-    for (const link of visibleData.links) {
-      sourceMap.set(link.source, [...(sourceMap.get(link.source) ?? []), link]);
-      targetMap.set(link.target, [...(targetMap.get(link.target) ?? []), link]);
-    }
+    transactions.forEach((transaction) => {
+      if (!transaction.from || !transaction.to) {
+        return;
+      }
 
-    return buildTree(
-      initialNode,
-      0,
-      new Set<number>([initialNode.id]),
-      sourceMap,
-      targetMap,
-      nodeMap,
-    );
-  }, [buildTree, initialNode, nodes, visibleData.links]);
-
-  useEffect(() => {
-    if (!initialNode) {
-      setVisibleData({ nodes: [], links: [] });
-      return;
-    }
-
-    const applicableLinks = links.filter((link) => {
-      const targetNode = nodes.find((candidate) => candidate.id === link.target);
-      return isValidAbsolutePath(targetNode?.pubkey);
+      outgoingMap.set(transaction.from, [
+        ...(outgoingMap.get(transaction.from) ?? []),
+        { to: transaction.to, memo: transaction.memo },
+      ]);
     });
 
-    const applicableNodeIds = new Set<number>([
-      initialNode.id,
-      ...applicableLinks.map((link) => link.source),
-      ...applicableLinks.map((link) => link.target),
-    ]);
+    const buildTree = (currentKey: string, depth: number, path: Set<string>): TreeNode => {
+      if (depth >= MAX_TREE_DEPTH) {
+        return { pubkey: currentKey, children: [] };
+      }
 
-    const applicableNodes = nodes.filter((node) => applicableNodeIds.has(node.id));
+      let outgoing = outgoingMap.get(currentKey) ?? [];
 
-    setVisibleData({
-      nodes: applicableNodes,
-      links: applicableLinks,
-    });
-  }, [initialNode, links, nodes]);
+      if (!outgoing.length && depth === 0) {
+        outgoing = transactions
+          .filter((transaction) => transaction.to === currentKey && transaction.from)
+          .map((transaction) => ({ to: transaction.from as string, memo: transaction.memo }));
+      }
+
+      const uniqueChildren = new Map<string, { memo?: string }>();
+      outgoing.forEach(({ to, memo }) => {
+        if (!uniqueChildren.has(to)) {
+          uniqueChildren.set(to, { memo });
+        }
+      });
+
+      const children = [...uniqueChildren.entries()]
+        .filter(([to]) => !path.has(to))
+        .map(([to, payload]) => {
+          const nextPath = new Set(path);
+          nextPath.add(to);
+          const child = buildTree(to, depth + 1, nextPath);
+          return {
+            ...child,
+            memo: payload.memo,
+          };
+        });
+
+      return {
+        pubkey: currentKey,
+        children,
+      };
+    };
+
+    return buildTree(forKey, 0, new Set([forKey]));
+  }, [forKey, transactions]);
 
   return (
     <IonCard>
@@ -389,66 +280,24 @@ function DirTree({
               display: 'flex',
               alignItems: 'center',
               flexWrap: 'wrap',
-              gap: 4,
+              gap: 8,
               fontFamily: 'monospace, monospace',
               minHeight: '30px',
             }}
           >
-            <button
-              type="button"
-              onClick={() => setForKey('/')}
-              style={{
-                border: 'none',
-                background: 'transparent',
-                color: 'var(--ion-color-primary)',
-                padding: 0,
-                cursor: 'pointer',
-                fontFamily: 'inherit',
-                fontSize: 'inherit',
-                textDecoration: 'underline',
-              }}
-            >
-              ..
-            </button>
-            <code>/</code>
-            {clickableSegments.map((segment, index) => (
-              <div
-                key={segment.value}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 4,
-                }}
-              >
-                <button
-                  type="button"
-                  onClick={() => setForKey(segment.value)}
-                  style={{
-                    border: 'none',
-                    background: 'transparent',
-                    color: 'var(--ion-color-primary)',
-                    padding: 0,
-                    cursor: 'pointer',
-                    fontFamily: 'inherit',
-                    fontSize: 'inherit',
-                    textDecoration: 'underline',
-                  }}
-                >
-                  {segment.label}
-                </button>
-                {index < clickableSegments.length - 1 && <code>/</code>}
-              </div>
-            ))}
+            <span>Public key:</span>
+            <code>{trimPubkeyDisplay(forKey)}</code>
           </div>
         </IonCardSubtitle>
       </IonCardHeader>
       <IonCardContent>
-        {!rootTree && <p>No entries available for this key.</p>}
-        {rootTree && (
+        {!rootTree && <p>Set a public key to load transactions.</p>}
+        {rootTree && rootTree.children.length === 0 && <p>No entries available for this key.</p>}
+        {rootTree && rootTree.children.length > 0 && (
           <TreeBranch
             branch={rootTree}
             isRoot={true}
-            onNodeClick={(node) => handleNodeFocus(node)}
+            onNodeClick={(pubkey) => setForKey(pubkey)}
             currentKey={forKey}
           />
         )}
@@ -464,18 +313,15 @@ const TreeBranch = ({
   isRoot = false,
 }: {
   branch: TreeNode;
-  onNodeClick: (node: GraphNode) => void;
+  onNodeClick: (pubkey: string) => void;
   currentKey: string;
   isRoot?: boolean;
 }) => {
-
-  const trimmedPubkey = toDisplayPath(branch.node.pubkey);
-  const isCurrentNode = toDisplayPath(branch.node.pubkey) === toDisplayPath(currentKey);
+  const trimmedPubkey = trimPubkeyDisplay(branch.pubkey);
+  const isCurrentNode = branch.pubkey === currentKey;
   const [activeMemo, setActiveMemo] = useState<MemoContent | null>(null);
-  const memoContent = getMemoContent(branch.node.memo);
+  const memoContent = getMemoContent(branch.memo);
   const memoIcon = getMemoIcon(memoContent);
-  const isCurrentNodeWithoutMemo = isCurrentNode && !memoContent;
-  const isNodeButtonEnabled = !isCurrentNodeWithoutMemo;
 
   return (
     <div
@@ -488,19 +334,15 @@ const TreeBranch = ({
     >
       <IonList inset={true}>
         <IonItem
-          button={isNodeButtonEnabled}
+          button={true}
           detail={true}
-          disabled={!isNodeButtonEnabled}
           color={isCurrentNode ? 'primary' : undefined}
           onClick={() => {
-            if (!isNodeButtonEnabled) {
-              return;
-            }
             if (isCurrentNode && memoContent) {
               setActiveMemo(memoContent);
               return;
             }
-            onNodeClick(branch.node);
+            onNodeClick(branch.pubkey);
           }}
         >
           <div
@@ -527,7 +369,7 @@ const TreeBranch = ({
         <div style={{ marginTop: 4 }}>
           {branch.children.map((child) => (
             <TreeBranch
-              key={`${branch.node.id}-${child.node.id}`}
+              key={`${branch.pubkey}-${child.pubkey}`}
               branch={child}
               onNodeClick={onNodeClick}
               currentKey={currentKey}
@@ -537,12 +379,7 @@ const TreeBranch = ({
       )}
 
       <IonModal isOpen={Boolean(activeMemo)} onDidDismiss={() => setActiveMemo(null)}>
-        {activeMemo && (
-          <MemoModal
-            onDismiss={() => setActiveMemo(null)}
-            content={activeMemo}
-          />
-        )}
+        {activeMemo && <MemoModal onDismiss={() => setActiveMemo(null)} content={activeMemo} />}
       </IonModal>
     </div>
   );

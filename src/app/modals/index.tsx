@@ -1,36 +1,27 @@
 import { PageShell } from '../components/pageShell';
-import { useContext, useEffect, useMemo, useState } from 'react';
+import { useContext, useEffect, useState } from 'react';
 import { AppContext } from '../utils/appContext';
 import DirTree from '../components/dirTree';
 import { IonIcon, useIonModal } from '@ionic/react';
-import { terminalOutline, timerOutline, optionsOutline, addCircleOutline } from 'ionicons/icons';
+import { terminalOutline, timerOutline, addCircleOutline } from 'ionicons/icons';
 import WebsocketConsole from './websocketConsole';
 import Sequence from './sequence';
 import Assert from './assert';
-import Filter from './filter';
-
-const toDisplayPath = (value: string) => {
-  const trimmedValue = value.replace(/0+=+$/g, '');
-  return trimmedValue || '/';
-};
-
-const toRequestPath = (value: string) => {
-  const displayPath = toDisplayPath(value);
-  const normalized = displayPath === '/' ? displayPath : `${displayPath.replace(/\/+$/g, '')}/`;
-  return `${normalized.padEnd(43, '0')}=`;
-};
+import { usePubKeyTransactions } from '../useCases/usePubKeyTxs';
 
 const Explore = () => {
-  const { colorScheme, graph, requestGraph, rankingFilter } =
-    useContext(AppContext);
+  const { selectedKeyIndex, publicKeys } = useContext(AppContext);
 
-  const [peekGraphKey, setPeekGraphKey] = useState<string>('/');
-  const whichKey = useMemo(() => toDisplayPath(peekGraphKey), [peekGraphKey]);
+  const defaultPublicKey = publicKeys[selectedKeyIndex[0]]?.[selectedKeyIndex[1]] ?? '';
+  const [peekGraphKey, setPeekGraphKey] = useState<string>(defaultPublicKey);
 
-  const [presentFilterModal, dismissFilter] = useIonModal(Filter, {
-    onDismiss: () => dismissFilter(),
-    value: rankingFilter,
-  });
+  useEffect(() => {
+    if (!peekGraphKey && defaultPublicKey) {
+      setPeekGraphKey(defaultPublicKey);
+    }
+  }, [defaultPublicKey, peekGraphKey]);
+
+  const transactions = usePubKeyTransactions(peekGraphKey);
 
   const [presentBlockModal, dismissBlock] = useIonModal(Sequence, {
     onDismiss: (data: string, role: string) => dismissBlock(data, role),
@@ -38,7 +29,7 @@ const Explore = () => {
 
   const [presentPointModal, dismissPoint] = useIonModal(Assert, {
     onDismiss: (data: string, role: string) => dismissPoint(data, role),
-    forKey: whichKey,
+    forKey: peekGraphKey,
   });
 
   const [presentSocketConsole, dismissSocketConsole] = useIonModal(
@@ -48,56 +39,19 @@ const Explore = () => {
     },
   );
 
-  useEffect(() => {
-    const timeoutId = window.setTimeout(() => {
-      if (whichKey) {
-        requestGraph(toRequestPath(whichKey));
-      }
-    }, 0);
-    return () => {
-      window.clearTimeout(timeoutId);
-    };
-  }, [whichKey, requestGraph]);
-
-  useEffect(() => {
-    const resultHandler = (data: any) => {
-      if (whichKey && data.detail) {
-        requestGraph(toRequestPath(whichKey));
-      }
-    };
-
-    document.addEventListener('inv_block', resultHandler);
-
-    return () => {
-      document.removeEventListener('inv_block', resultHandler);
-    };
-  }, [whichKey, requestGraph]);
-
   return (
     <PageShell
+      selectedPublicKey={peekGraphKey}
+      onPublicKeyChange={setPeekGraphKey}
       tools={[
         {
-          label: 'Filter',
-          renderIcon: () => <IonIcon
-            slot="icon-only"
-            icon={optionsOutline}
-          />,
-          action: () => presentFilterModal(),
-        },
-        {
           label: 'Sequence',
-          renderIcon: () => <IonIcon
-            slot="icon-only"
-            icon={timerOutline}
-          />,
+          renderIcon: () => <IonIcon slot="icon-only" icon={timerOutline} />,
           action: () => presentBlockModal(),
         },
         {
           label: 'Assert',
-          renderIcon: () => <IonIcon
-            slot="icon-only"
-            icon={addCircleOutline}
-          />,
+          renderIcon: () => <IonIcon slot="icon-only" icon={addCircleOutline} />,
           action: () => presentPointModal(),
         },
         {
@@ -107,21 +61,11 @@ const Explore = () => {
         },
       ]}
       renderBody={() => (
-        <>
-          {!!whichKey && (
-            <>
-              {!!graph && (
-                <DirTree
-                  forKey={whichKey}
-                  nodes={graph.nodes ?? []}
-                  links={graph.links ?? []}
-                  setForKey={setPeekGraphKey}
-                  colorScheme={colorScheme}
-                />
-              )}
-            </>
-          )}
-        </>
+        <DirTree
+          forKey={peekGraphKey}
+          transactions={transactions}
+          setForKey={setPeekGraphKey}
+        />
       )}
     />
   );

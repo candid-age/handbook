@@ -26,34 +26,55 @@ interface Props {
   onDismissModal?: () => void;
   renderBody: () => JSX.Element;
   tools?: ToolBarButton[];
+  selectedPublicKey?: string;
+  onPublicKeyChange?: (publicKey: string) => void;
 }
 
-export const PageShell = ({ onDismissModal, renderBody, tools }: Props) => {
+export const PageShell = ({
+  onDismissModal,
+  renderBody,
+  tools,
+  selectedPublicKey,
+  onPublicKeyChange,
+}: Props) => {
   const { selectedNode, setSelectedNode } = useContext(AppContext);
 
   const [present, dismiss] = useIonModal(Navigator, {
-    onDismiss: (data: string, role: string) => dismiss(data, role)
+    onDismiss: (data: string, role: string) => dismiss(data, role),
+    selectedPublicKey,
   });
 
   const openModal = useCallback(() => {
     present({
       onWillDismiss: (ev: CustomEvent<OverlayEventDetail>) => {
-        if (ev.detail.role === 'confirm') {
-          setSelectedNode(ev.detail.data!);
+        if (ev.detail.role !== 'confirm') {
+          return;
         }
+
+        const value = `${ev.detail.data ?? ''}`;
+        if (!value) {
+          return;
+        }
+
+        if (onPublicKeyChange) {
+          onPublicKeyChange(value);
+          return;
+        }
+
+        setSelectedNode(value);
       },
     });
-  }, [present, setSelectedNode]);
+  }, [onPublicKeyChange, present, setSelectedNode]);
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {
-      if (!selectedNode) {
+      if (!selectedNode && !selectedPublicKey) {
         openModal();
       }
     }, 0);
 
     return () => window.clearTimeout(timeoutId);
-  }, [selectedNode, openModal]);
+  }, [selectedNode, selectedPublicKey, openModal]);
 
   return (
     <IonPage>

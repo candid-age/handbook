@@ -9,27 +9,42 @@ import {
   IonContent,
   IonHeader,
   IonIcon,
+  IonInput,
+  IonItem,
+  IonLabel,
   IonPage,
   IonToolbar,
 } from '@ionic/react';
 import { sunnyOutline } from 'ionicons/icons';
+import { useMemo, useState } from 'react';
 
 const Navigator = ({
   onDismiss,
+  selectedPublicKey,
 }: {
   onDismiss: (data?: string | null | undefined, role?: string) => void;
+  selectedPublicKey?: string;
 }) => {
+  const [publicKey, setPublicKey] = useState(selectedPublicKey ?? '');
+
+  const trimmedPublicKey = useMemo(() => publicKey.trim(), [publicKey]);
 
   return (
     <IonPage>
       <IonHeader>
         <IonToolbar>
           <IonButtons slot="start">
-            <IonButton
-              color="medium"
-              onClick={() => onDismiss(null, 'cancel')}
-            >
+            <IonButton color="medium" onClick={() => onDismiss(null, 'cancel')}>
               Close
+            </IonButton>
+          </IonButtons>
+          <IonButtons slot="end">
+            <IonButton
+              strong={true}
+              disabled={!trimmedPublicKey}
+              onClick={() => onDismiss(trimmedPublicKey, 'confirm')}
+            >
+              Set key
             </IonButton>
           </IonButtons>
         </IonToolbar>
@@ -56,9 +71,15 @@ const Navigator = ({
             </IonCardTitle>
           </IonCardHeader>
           <IonCardContent>
-            <IonCardSubtitle>
-              Arise, shine, for your light has come...
-            </IonCardSubtitle>
+            <IonCardSubtitle>Set the public key used to load the tree view.</IonCardSubtitle>
+            <IonItem className="ion-margin-top">
+              <IonLabel position="stacked">Public key</IonLabel>
+              <IonInput
+                value={publicKey}
+                placeholder="Enter public key"
+                onIonInput={(event) => setPublicKey(event.detail.value ?? '')}
+              />
+            </IonItem>
           </IonCardContent>
         </IonCard>
       </IonContent>

@@ -3,8 +3,6 @@ import {
   Block,
   BlockIdHeaderPair,
   Transaction,
-  GraphNode,
-  GraphLink,
 } from '../utils/appTypes';
 
 interface AppState {
@@ -21,11 +19,6 @@ interface AppState {
   setCurrentBlock: (currentBlock: Block) => void;
   genesisBlock?: Block | null;
   setGenesisBlock: (genesisBlock: Block) => void;
-  requestGraph: (publicKeyB64: string) => void;
-  graph: {
-    nodes: GraphNode[];
-    links: GraphLink[];
-  } | null;
   rankingFilter: number;
   setRankingFilter: (rankingFilter: number) => void;
   requestTransaction: (
@@ -72,8 +65,6 @@ export const AppContext = createContext<AppState>({
   setCurrentBlock: (currentBlock: Block) => {},
   genesisBlock: undefined,
   setGenesisBlock: (genesisBlock: Block) => {},
-  requestGraph: (publicKeyB64: string) => {},
-  graph: null,
   rankingFilter: 0,
   setRankingFilter: () => {},
   requestTransaction:
