@@ -6,7 +6,6 @@ import { GraphLink, GraphNode, Transaction } from './appTypes';
 export const parseGraphDOT = (
   dotString: string,
   forKey: string,
-  rankingFilter: number,
 ) => {
   const graph: Graph = fromDot(dotString || 'digraph{}');
 
@@ -15,13 +14,11 @@ export const parseGraphDOT = (
 
   graph.forEachNode((node: any) => {
     const pubkey = node.data.pubkey as string;
-    const locale = node.data.locale as string;
     const label = node.data.label as string;
     const memo = node.data.memo as string | undefined;
-    const ranking = Number(node.data.ranking);
-    const imbalance = Number(node.data.imbalance);
+    const balance = Number(node.data.balance);
 
-    if (forKey !== pubkey && rankingFilter / 100 > ranking) return;
+    if (forKey !== pubkey) return;
 
 
     nodes.push({
@@ -30,9 +27,7 @@ export const parseGraphDOT = (
       label,
       memo,
       pubkey,
-      ranking,
-      locale,
-      imbalance,
+      balance,
     });
   });
 

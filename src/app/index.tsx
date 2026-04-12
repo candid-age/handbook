@@ -69,7 +69,6 @@ const App: React.FC = () => {
     links: GraphLink[];
   } | null>('flow-graph', null);
 
-  const [rankingFilter, setRankingFilter] = useState(0);
   const [navigatorPublicKey, setNavigatorPublicKey] = usePersistentState(
     'navigator-public-key',
     '',
@@ -406,8 +405,6 @@ const App: React.FC = () => {
     setNavigatorPublicKey,
     transactionRange,
     setTransactionRange,
-    rankingFilter,
-    setRankingFilter,
     pushTransaction,
     requestTransaction,
     requestPkTransactions,

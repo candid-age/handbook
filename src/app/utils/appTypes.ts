@@ -6,9 +6,7 @@ export interface GraphNode {
   pubkey: string;
   label: string;
   memo?: string;
-  locale?: string;
-  ranking: number;
-  imbalance: number;
+  balance: number;
 }
 
 export interface GraphLink {
@@ -25,7 +23,7 @@ export interface BlockHeader {
   hash_list_root: string;
   time: number;
   target: string;
-  point_work: string;
+  chain_work: string;
   nonce: number;
   height: number;
   transaction_count: number;

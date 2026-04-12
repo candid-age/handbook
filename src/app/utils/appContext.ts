@@ -39,8 +39,6 @@ interface AppState {
     endHeight: number;
     limit: number;
   }) => void;
-  rankingFilter: number;
-  setRankingFilter: (rankingFilter: number) => void;
   requestTransaction: (
     transaction_id: string,
     resultHandler: (transaction: Transaction) => void,
@@ -101,8 +99,6 @@ export const AppContext = createContext<AppState>({
     limit: 500,
   },
   setTransactionRange: () => {},
-  rankingFilter: 0,
-  setRankingFilter: () => {},
   requestTransaction:
     (transaction_id: string, resultHandler: (transaction: Transaction) => void) =>
     () => {},

@@ -79,8 +79,7 @@ const inflateNodes = (pubKey: string) => {
 type InternalNode = {
   id: number;
   pubkey: string;
-  ranking: number;
-  imbalance: number;
+  balance: number;
   memo?: string;
 };
 
@@ -108,8 +107,7 @@ export const indexTransactionsToGraph = (
     nodes.set(id, {
       id,
       pubkey: padded,
-      ranking: 1,
-      imbalance: 0,
+      balance: 0,
     });
     return id;
   };
@@ -238,8 +236,7 @@ export const indexTransactionsToGraph = (
     id: node.id,
     label: node.pubkey.replace(/[0=]+$/g, ''),
     pubkey: node.pubkey,
-    ranking: node.ranking,
-    imbalance: node.imbalance,
+    balance: node.balance,
     memo: node.memo,
     group: 1,
   }));

@@ -4,7 +4,6 @@ import {
   IonCard,
   IonCardContent,
   IonCardHeader,
-  IonCardSubtitle,
   IonCardTitle,
   IonContent,
   IonHeader,
@@ -89,9 +88,6 @@ const Navigator = ({
             </IonCardTitle>
           </IonCardHeader>
           <IonCardContent>
-            <IonCardSubtitle>
-              Arise, shine, for your light has come...
-            </IonCardSubtitle>
             <IonList inset>
               <IonItem>
                 <IonLabel position="stacked">Public key</IonLabel>

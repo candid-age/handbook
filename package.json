@@ -1,7 +1,7 @@
 {
   "name": "handbook",
   "version": "0.1.0",
-  "homepage": "https://candid-agency.github.io/handbook",
+  "homepage": "https://candid-age.github.io/handbook",
   "private": true,
   "dependencies": {
     "@ionic/react": "^8.5.4",

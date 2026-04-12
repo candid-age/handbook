@@ -3,12 +3,10 @@ import { useContext, useEffect, useMemo, useState } from 'react';
 import { AppContext } from '../utils/appContext';
 import DirTree from '../components/dirTree';
 import { IonIcon, useIonModal } from '@ionic/react';
-import { terminalOutline, timerOutline, optionsOutline, addCircleOutline } from 'ionicons/icons';
-import WebsocketConsole from './websocketConsole';
-import Sequence from './sequence';
-import Assert from './assert';
-import Filter from './filter';
-import { indexTransactionsToGraph } from '../utils/directoryIndexer';
+import { terminalOutline, addCircleOutline } from 'ionicons/icons';
+import WebsocketConsole from './console';
+import Send from './send';
+import { indexTransactionsToGraph } from '../utils/indexer';
 
 const toDisplayPath = (value: string) => {
   const trimmedValue = value.replace(/0+=+$/g, '');
@@ -20,7 +18,6 @@ const Explore = () => {
     colorScheme,
     graph,
     setGraph,
-    rankingFilter,
     navigatorPublicKey,
     transactionRange,
     requestPkTransactions,
@@ -30,17 +27,8 @@ const Explore = () => {
   const [peekGraphKey, setPeekGraphKey] = useState<string>('/');
   const whichKey = useMemo(() => toDisplayPath(peekGraphKey), [peekGraphKey]);
 
-  const [presentFilterModal, dismissFilter] = useIonModal(Filter, {
-    onDismiss: () => dismissFilter(),
-    value: rankingFilter,
-  });
-
-  const [presentBlockModal, dismissBlock] = useIonModal(Sequence, {
-    onDismiss: (data: string, role: string) => dismissBlock(data, role),
-  });
-
-  const [presentPointModal, dismissPoint] = useIonModal(Assert, {
-    onDismiss: (data: string, role: string) => dismissPoint(data, role),
+  const [presentSendModal, dismissSend] = useIonModal(Send, {
+    onDismiss: (data: string, role: string) => dismissSend(data, role),
     forKey: whichKey,
   });
 
@@ -125,28 +113,12 @@ const Explore = () => {
     <PageShell
       tools={[
         {
-          label: 'Filter',
-          renderIcon: () => <IonIcon
-            slot="icon-only"
-            icon={optionsOutline}
-          />,
-          action: () => presentFilterModal(),
-        },
-        {
-          label: 'Sequence',
-          renderIcon: () => <IonIcon
-            slot="icon-only"
-            icon={timerOutline}
-          />,
-          action: () => presentBlockModal(),
-        },
-        {
-          label: 'Assert',
+          label: 'Send',
           renderIcon: () => <IonIcon
             slot="icon-only"
             icon={addCircleOutline}
           />,
-          action: () => presentPointModal(),
+          action: () => presentSendModal(),
         },
         {
           label: 'WebSocket console',
