@@ -4,8 +4,6 @@ import {
   IonCard,
   IonCardContent,
   IonContent,
-  IonCardHeader,
-  IonCardSubtitle,
   IonButtons,
   IonHeader,
   IonItem,
@@ -19,6 +17,7 @@ import {
 } from '@ionic/react';
 import { documentTextOutline, linkOutline, logoYoutube } from 'ionicons/icons';
 import { GraphLink, GraphNode } from '../../utils/appTypes';
+import { getMemoContent, MemoContent } from '../../utils/memoContent';
 
 const MAX_TREE_DEPTH = 8;
 
@@ -28,11 +27,6 @@ interface TreeNode {
   outgoing: GraphLink[];
   children: TreeNode[];
 }
-
-type MemoContent =
-  | { type: 'youtube'; videoId: string }
-  | { type: 'url'; url: string }
-  | { type: 'text'; text: string };
 
 const isValidAbsolutePath = (value?: string) => {
   if (!value || !value.startsWith('/')) {
@@ -65,88 +59,8 @@ const toDisplayPath = (value: string) => {
   return trimmed || '/';
 };
 
-const buildPathSegments = (value: string) => {
-  if (!isValidAbsolutePath(value) || value === '/') {
-    return [];
-  }
-
-  const parts = value.split('/').filter(Boolean);
-  let currentPath = '/';
-
-  return parts.map((segment) => {
-    currentPath = `${currentPath}${segment}/`;
-    return {
-      label: segment,
-      value: currentPath,
-    };
-  });
-};
-
-const getYouTubeVideoId = (value?: string) => {
-  if (!value?.trim()) {
-    return null;
-  }
-
-  try {
-    const url = new URL(value.trim());
-    const host = url.hostname.toLowerCase().replace(/^www\./, '');
-
-    if (host === 'youtu.be') {
-      const shortId = url.pathname.split('/').filter(Boolean)[0];
-      return shortId && /^[\w-]{11}$/.test(shortId) ? shortId : null;
-    }
-
-    if (!host.endsWith('youtube.com')) {
-      return null;
-    }
-
-    const segments = url.pathname.split('/').filter(Boolean);
-    if (segments[0] === 'shorts' || segments[0] === 'embed') {
-      const embeddedId = segments[1];
-      return embeddedId && /^[\w-]{11}$/.test(embeddedId) ? embeddedId : null;
-    }
-
-    const watchId = url.searchParams.get('v');
-    return watchId && /^[\w-]{11}$/.test(watchId) ? watchId : null;
-  } catch {
-    return null;
-  }
-};
-
-const getMemoContent = (memo?: string): MemoContent | null => {
-  const trimmedMemo = memo?.trim();
-  if (!trimmedMemo) {
-    return null;
-  }
-
-  const youtubeVideoId = getYouTubeVideoId(trimmedMemo);
-  if (youtubeVideoId) {
-    return {
-      type: 'youtube',
-      videoId: youtubeVideoId,
-    };
-  }
-
-  try {
-    const parsedUrl = new URL(trimmedMemo);
-    if (parsedUrl.protocol === 'http:' || parsedUrl.protocol === 'https:') {
-      return {
-        type: 'url',
-        url: parsedUrl.toString(),
-      };
-    }
-  } catch {
-    // fall back to plain text rendering
-  }
-
-  return {
-    type: 'text',
-    text: trimmedMemo,
-  };
-};
-
-const getMemoIcon = (memoContent: MemoContent | null) => {
-  if (!memoContent) {
+const getMemoIcon = (memoContent: MemoContent) => {
+  if (memoContent.type === 'empty') {
     return null;
   }
 
@@ -203,6 +117,14 @@ const MemoModal = ({
       );
     }
 
+    if (content.type === 'empty') {
+      return (
+        <IonText color="medium">
+          <p style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{content.text}</p>
+        </IonText>
+      );
+    }
+
     return (
       <IonText>
         <p style={{ whiteSpace: 'pre-wrap', margin: 0 }}>{content.text}</p>
@@ -236,19 +158,20 @@ function DirTree({
   setForKey,
   nodes,
   links,
+  onLeafOpen,
 }: {
   forKey: string;
   setForKey: (pk: string) => void;
   nodes: GraphNode[];
   links: GraphLink[];
-  colorScheme: 'light' | 'dark';
+  onLeafOpen?: (txId: string) => void;
 }) {
 
   const handleNodeFocus = useCallback(
     (node: GraphNode | null | undefined) => {
       if (node?.pubkey) {
-          setForKey(toDisplayPath(node.pubkey));
-        }
+        setForKey(toDisplayPath(node.pubkey));
+      }
     },
     [setForKey],
   );
@@ -262,10 +185,6 @@ function DirTree({
   useEffect(() => {
     handleNodeFocus(initialNode);
   }, [initialNode, handleNodeFocus]);
-
-  const clickableSegments = useMemo(() => {
-    return buildPathSegments(toDisplayPath(forKey));
-  }, [forKey]);
 
   const [visibleData, setVisibleData] = useState<{
     nodes: GraphNode[];
@@ -375,73 +294,6 @@ function DirTree({
 
   return (
     <IonCard>
-      <IonCardHeader className="ion-padding-horizontal">
-        <IonCardSubtitle
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-          }}
-        >
-          <div
-            style={{
-              width: '100%',
-              display: 'flex',
-              alignItems: 'center',
-              flexWrap: 'wrap',
-              gap: 4,
-              fontFamily: 'monospace, monospace',
-              minHeight: '30px',
-            }}
-          >
-            <button
-              type="button"
-              onClick={() => setForKey('/')}
-              style={{
-                border: 'none',
-                background: 'transparent',
-                color: 'var(--ion-color-primary)',
-                padding: 0,
-                cursor: 'pointer',
-                fontFamily: 'inherit',
-                fontSize: 'inherit',
-                textDecoration: 'underline',
-              }}
-            >
-              ..
-            </button>
-            <code>/</code>
-            {clickableSegments.map((segment, index) => (
-              <div
-                key={segment.value}
-                style={{
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 4,
-                }}
-              >
-                <button
-                  type="button"
-                  onClick={() => setForKey(segment.value)}
-                  style={{
-                    border: 'none',
-                    background: 'transparent',
-                    color: 'var(--ion-color-primary)',
-                    padding: 0,
-                    cursor: 'pointer',
-                    fontFamily: 'inherit',
-                    fontSize: 'inherit',
-                    textDecoration: 'underline',
-                  }}
-                >
-                  {segment.label}
-                </button>
-                {index < clickableSegments.length - 1 && <code>/</code>}
-              </div>
-            ))}
-          </div>
-        </IonCardSubtitle>
-      </IonCardHeader>
       <IonCardContent>
         {!rootTree && <p>No entries available for this key.</p>}
         {rootTree && (
@@ -450,6 +302,7 @@ function DirTree({
             isRoot={true}
             onNodeClick={(node) => handleNodeFocus(node)}
             currentKey={forKey}
+            onLeafOpen={onLeafOpen}
           />
         )}
       </IonCardContent>
@@ -464,6 +317,7 @@ const TreeBranch = ({
   isRoot = false,
   depth = 0,
   maxVisibleDepth = 1,
+  onLeafOpen,
 }: {
   branch: TreeNode;
   onNodeClick: (node: GraphNode) => void;
@@ -471,6 +325,7 @@ const TreeBranch = ({
   isRoot?: boolean;
   depth?: number;
   maxVisibleDepth?: number;
+  onLeafOpen?: (txId: string) => void;
 }) => {
 
   const trimmedPubkey = toDisplayPath(branch.node.pubkey);
@@ -478,7 +333,7 @@ const TreeBranch = ({
   const [activeMemo, setActiveMemo] = useState<MemoContent | null>(null);
   const memoContent = getMemoContent(branch.node.memo);
   const memoIcon = getMemoIcon(memoContent);
-  const isCurrentNodeWithoutMemo = isCurrentNode && !memoContent;
+  const isCurrentNodeWithoutMemo = isCurrentNode && memoContent.type === 'empty';
   const isNodeButtonEnabled = !isCurrentNodeWithoutMemo;
 
   return (
@@ -501,6 +356,10 @@ const TreeBranch = ({
               return;
             }
             if (isCurrentNode && memoContent) {
+              if (onLeafOpen && branch.node.memoTransactionId) {
+                onLeafOpen(branch.node.memoTransactionId);
+                return;
+              }
               setActiveMemo(memoContent);
               return;
             }
@@ -537,6 +396,7 @@ const TreeBranch = ({
               currentKey={currentKey}
               depth={depth + 1}
               maxVisibleDepth={maxVisibleDepth}
+              onLeafOpen={onLeafOpen}
             />
           ))}
         </div>

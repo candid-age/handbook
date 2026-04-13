@@ -6,6 +6,7 @@ export interface GraphNode {
   pubkey: string;
   label: string;
   memo?: string;
+  memoTransactionId?: string;
   balance: number;
 }
 

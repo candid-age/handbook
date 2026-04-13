@@ -1,4 +1,5 @@
 import { GraphLink, GraphNode, Transaction } from './appTypes';
+import { transactionID } from './compat';
 
 const BASE64_KEY_LENGTH = 44;
 
@@ -81,6 +82,9 @@ type InternalNode = {
   pubkey: string;
   balance: number;
   memo?: string;
+  memoTransactionId?: string;
+  memoSeries?: number;
+  memoTime?: number;
 };
 
 type LinkKind = 'spatial' | 'temporal' | 'periodic' | 'verbal';
@@ -228,7 +232,22 @@ export const indexTransactionsToGraph = (
 
     const targetNode = nodes.get(getNodeId(txn.to));
     if (targetNode) {
-      targetNode.memo = txnMemo;
+      const txId = transactionID(txn);
+      const txnSeries = txn.series ?? 0;
+      const previousSeries = targetNode.memoSeries ?? Number.NEGATIVE_INFINITY;
+      const previousTime = targetNode.memoTime ?? Number.NEGATIVE_INFINITY;
+      const previousId = targetNode.memoTransactionId ?? '';
+      const shouldReplace =
+        txnSeries > previousSeries ||
+        (txnSeries === previousSeries && txn.time > previousTime) ||
+        (txnSeries === previousSeries && txn.time === previousTime && txId > previousId);
+
+      if (shouldReplace) {
+        targetNode.memo = txnMemo;
+        targetNode.memoTransactionId = txId;
+        targetNode.memoSeries = txnSeries;
+        targetNode.memoTime = txn.time;
+      }
     }
   });
 
@@ -238,6 +257,7 @@ export const indexTransactionsToGraph = (
     pubkey: node.pubkey,
     balance: node.balance,
     memo: node.memo,
+    memoTransactionId: node.memoTransactionId,
     group: 1,
   }));
 
