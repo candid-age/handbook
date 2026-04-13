@@ -215,9 +215,10 @@ const MemoFeed = ({
         scrollSnapType: 'y mandatory',
       }}
     >
-      {visibleEntries.map((entry) => {
+      {visibleEntries.map((entry, entryIndex) => {
         const { tx } = entry;
         const content = getMemoContent(tx.memo);
+        const isFocusedEntry = entryIndex === activeIndex;
         const drillLabel = content.type === 'text' || content.type === 'empty'
           ? content.text.trim() || 'Switch navigator key'
           : tx.memo?.trim() || 'Switch navigator key';
@@ -275,39 +276,57 @@ const MemoFeed = ({
                     )}
 
                     {content.type === 'url' && (
-                      <iframe
-                        title="Memo web content"
-                        src={content.url}
-                        style={{ width: '100%', height: '65vh', border: 'none', borderRadius: 8 }}
-                        referrerPolicy="strict-origin-when-cross-origin"
-                        sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
-                      />
+                      <>
+                        {!isFocusedEntry && (
+                          <IonText color="medium">
+                            <p style={{ margin: 0, fontSize: 12 }}>Focus this card to load URL content.</p>
+                          </IonText>
+                        )}
+                        {isFocusedEntry && (
+                          <iframe
+                            title="Memo web content"
+                            src={content.url}
+                            style={{ width: '100%', height: '65vh', border: 'none', borderRadius: 8 }}
+                            referrerPolicy="strict-origin-when-cross-origin"
+                            sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
+                          />
+                        )}
+                      </>
                     )}
 
                     {content.type === 'youtube' && (
-                      <div
-                        style={{
-                          position: 'relative',
-                          width: '100%',
-                          paddingBottom: '177.78%',
-                        }}
-                      >
-                        <iframe
-                          title="Memo YouTube short"
-                          src={`https://www.youtube.com/embed/${content.videoId}?autoplay=1&mute=1&playsinline=1`}
-                          style={{
-                            position: 'absolute',
-                            top: 0,
-                            left: 0,
-                            width: '100%',
-                            height: '100%',
-                            border: 'none',
-                          }}
-                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                          referrerPolicy="strict-origin-when-cross-origin"
-                          allowFullScreen
-                        />
-                      </div>
+                      <>
+                        {!isFocusedEntry && (
+                          <IonText color="medium">
+                            <p style={{ margin: 0, fontSize: 12 }}>Focus this card to load video content.</p>
+                          </IonText>
+                        )}
+                        {isFocusedEntry && (
+                          <div
+                            style={{
+                              position: 'relative',
+                              width: '100%',
+                              paddingBottom: '177.78%',
+                            }}
+                          >
+                            <iframe
+                              title="Memo YouTube short"
+                              src={`https://www.youtube.com/embed/${content.videoId}?autoplay=1&mute=1&playsinline=1`}
+                              style={{
+                                position: 'absolute',
+                                top: 0,
+                                left: 0,
+                                width: '100%',
+                                height: '100%',
+                                border: 'none',
+                              }}
+                              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                              referrerPolicy="strict-origin-when-cross-origin"
+                              allowFullScreen
+                            />
+                          </div>
+                        )}
+                      </>
                     )}
                   </>
                 )}
