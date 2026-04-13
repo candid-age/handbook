@@ -205,9 +205,10 @@ const MemoFeed = ({
         scrollSnapType: 'y mandatory',
       }}
     >
-      {visibleEntries.map((entry) => {
+      {visibleEntries.map((entry, index) => {
         const { tx } = entry;
         const content = getMemoContent(tx.memo);
+        const isFocused = index === activeIndex;
 
         return (
           <div
@@ -218,8 +219,9 @@ const MemoFeed = ({
             <IonCard>
               <IonCardHeader>
                 <IonCardSubtitle>{tx.txId.slice(0, 14)}…</IonCardSubtitle>
-                <IonCardTitle style={{ fontSize: 14 }}>
-                  series: {tx.series ?? 'n/a'} · time: {tx.time}
+                <IonCardTitle style={{ fontSize: 12, lineHeight: 1.4, fontWeight: 400 }}>
+                  from: {tx.from || 'n/a'} · to: {tx.to || 'n/a'} · time: {tx.time} · series:{' '}
+                  {tx.series ?? 'n/a'}
                 </IonCardTitle>
               </IonCardHeader>
               <IonCardContent>
@@ -263,41 +265,51 @@ const MemoFeed = ({
                       </IonText>
                     )}
 
-                    {content.type === 'url' && (
-                      <iframe
-                        title="Memo web content"
-                        src={content.url}
-                        style={{ width: '100%', height: '65vh', border: 'none', borderRadius: 8 }}
-                        referrerPolicy="strict-origin-when-cross-origin"
-                        sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
-                      />
-                    )}
-
-                    {content.type === 'youtube' && (
-                      <div
-                        style={{
-                          position: 'relative',
-                          width: '100%',
-                          paddingBottom: '177.78%',
-                        }}
-                      >
+                    {content.type === 'url' &&
+                      (isFocused ? (
                         <iframe
-                          title="Memo YouTube short"
-                          src={`https://www.youtube.com/embed/${content.videoId}?autoplay=1&mute=1&playsinline=1`}
-                          style={{
-                            position: 'absolute',
-                            top: 0,
-                            left: 0,
-                            width: '100%',
-                            height: '100%',
-                            border: 'none',
-                          }}
-                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                          title="Memo web content"
+                          src={content.url}
+                          style={{ width: '100%', height: '65vh', border: 'none', borderRadius: 8 }}
                           referrerPolicy="strict-origin-when-cross-origin"
-                          allowFullScreen
+                          sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
                         />
-                      </div>
-                    )}
+                      ) : (
+                        <IonText color="medium">
+                          <p style={{ margin: 0, fontSize: 12 }}>Focus this card to load remote content.</p>
+                        </IonText>
+                      ))}
+
+                    {content.type === 'youtube' &&
+                      (isFocused ? (
+                        <div
+                          style={{
+                            position: 'relative',
+                            width: '100%',
+                            paddingBottom: '177.78%',
+                          }}
+                        >
+                          <iframe
+                            title="Memo YouTube short"
+                            src={`https://www.youtube.com/embed/${content.videoId}?autoplay=1&mute=1&playsinline=1`}
+                            style={{
+                              position: 'absolute',
+                              top: 0,
+                              left: 0,
+                              width: '100%',
+                              height: '100%',
+                              border: 'none',
+                            }}
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+                            referrerPolicy="strict-origin-when-cross-origin"
+                            allowFullScreen
+                          />
+                        </div>
+                      ) : (
+                        <IonText color="medium">
+                          <p style={{ margin: 0, fontSize: 12 }}>Focus this card to load video content.</p>
+                        </IonText>
+                      ))}
                   </>
                 )}
               </IonCardContent>
