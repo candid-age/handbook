@@ -13,6 +13,7 @@ import {
   IonItem,
   IonLabel,
   IonList,
+  IonRange,
   IonToolbar,
 } from '@ionic/react';
 import { sunnyOutline } from 'ionicons/icons';
@@ -29,11 +30,17 @@ const Navigator = ({
     setNavigatorPublicKey,
     transactionRange,
     setTransactionRange,
+    tipHeader,
   } = useContext(AppContext);
 
+  const maxHeight = tipHeader?.header.height ?? 0;
   const [publicKey, setPublicKey] = useState(navigatorPublicKey);
-  const [startHeight, setStartHeight] = useState(`${transactionRange.startHeight}`);
-  const [endHeight, setEndHeight] = useState(`${transactionRange.endHeight}`);
+  const [startHeight, setStartHeight] = useState(
+    `${Math.min(Math.max(transactionRange.startHeight, 0), maxHeight)}`,
+  );
+  const [endHeight, setEndHeight] = useState(
+    `${Math.min(Math.max(transactionRange.endHeight, 0), maxHeight)}`,
+  );
   const [limit, setLimit] = useState(`${transactionRange.limit}`);
 
   const canSave = useMemo(() => publicKey.trim().length > 0, [publicKey]);
@@ -53,9 +60,11 @@ const Navigator = ({
               disabled={!canSave}
               onClick={() => {
                 setNavigatorPublicKey(publicKey.trim());
+                const normalizedStart = Math.min(Math.max(Number(startHeight || 0), 0), maxHeight);
+                const normalizedEnd = Math.min(Math.max(Number(endHeight || 0), 0), maxHeight);
                 setTransactionRange({
-                  startHeight: Number(startHeight || 0),
-                  endHeight: Number(endHeight || 0),
+                  startHeight: Math.max(normalizedStart, normalizedEnd),
+                  endHeight: Math.min(normalizedStart, normalizedEnd),
                   limit: Number(limit || 500),
                 });
                 onDismiss('confirm');
@@ -116,12 +125,35 @@ const Navigator = ({
                 />
               </IonItem>
               <IonItem>
+                <IonLabel position="stacked">
+                  Height window ({endHeight} - {startHeight})
+                </IonLabel>
+                <IonRange
+                  dualKnobs
+                  min={0}
+                  max={maxHeight}
+                  step={1}
+                  value={{
+                    lower: Number(endHeight || 0),
+                    upper: Number(startHeight || 0),
+                  }}
+                  onIonChange={(event) => {
+                    const value = event.detail.value;
+                    if (typeof value === 'object' && value !== null) {
+                      setEndHeight(`${value.lower ?? 0}`);
+                      setStartHeight(`${value.upper ?? 0}`);
+                    }
+                  }}
+                />
+              </IonItem>
+              <IonItem>
                 <IonLabel position="stacked">Limit</IonLabel>
                 <IonInput
                   type="number"
                   min={1}
                   value={limit}
                   onIonInput={(event) => setLimit(`${event.detail.value ?? 500}`)}
+                  placeholder="500"
                 />
               </IonItem>
             </IonList>
