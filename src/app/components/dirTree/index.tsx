@@ -16,8 +16,9 @@ import {
   IonIcon,
 } from '@ionic/react';
 import { documentTextOutline, linkOutline, logoYoutube } from 'ionicons/icons';
-import { GraphLink, GraphNode } from '../../utils/appTypes';
+import { GraphLink, GraphNode, Transaction } from '../../utils/appTypes';
 import { getMemoContent, MemoContent } from '../../utils/memoContent';
+import { transactionID } from '../../utils/compat';
 
 const MAX_TREE_DEPTH = 8;
 
@@ -158,14 +159,21 @@ function DirTree({
   setForKey,
   nodes,
   links,
+  transactions,
   onLeafOpen,
 }: {
   forKey: string;
   setForKey: (pk: string) => void;
   nodes: GraphNode[];
   links: GraphLink[];
+  transactions: Transaction[];
   onLeafOpen?: (txId: string) => void;
 }) {
+  const [selectedLeaf, setSelectedLeaf] = useState<string | null>(null);
+
+  useEffect(() => {
+    setSelectedLeaf(null);
+  }, [forKey]);
 
   const handleNodeFocus = useCallback(
     (node: GraphNode | null | undefined) => {
@@ -302,13 +310,112 @@ function DirTree({
             isRoot={true}
             onNodeClick={(node) => handleNodeFocus(node)}
             currentKey={forKey}
+            onLeafSelect={(pubkey) => setSelectedLeaf(pubkey)}
             onLeafOpen={onLeafOpen}
+          />
+        )}
+        {!!selectedLeaf && (
+          <LeafMemoFeed
+            leafKey={selectedLeaf}
+            transactions={transactions}
+            onOpen={(txId) => {
+              if (onLeafOpen) {
+                onLeafOpen(txId);
+              }
+            }}
+            onClose={() => setSelectedLeaf(null)}
           />
         )}
       </IonCardContent>
     </IonCard>
   );
 }
+
+const normalizePath = (value?: string) => {
+  if (!value?.startsWith('/')) {
+    return null;
+  }
+
+  const compact = `${value.replace(/0+=+$/g, '').replace(/\/{2,}/g, '/')}`;
+  if (compact === '/') {
+    return '/';
+  }
+
+  return compact.endsWith('/') ? compact : `${compact}/`;
+};
+
+const trimPubkeyForMatch = (value?: string) => `${value ?? ''}`.replace(/0+=+$/g, '');
+
+const LeafMemoFeed = ({
+  leafKey,
+  transactions,
+  onOpen,
+  onClose,
+}: {
+  leafKey: string;
+  transactions: Transaction[];
+  onOpen: (txId: string) => void;
+  onClose: () => void;
+}) => {
+  const normalizedLeafPath = normalizePath(leafKey) ?? trimPubkeyForMatch(leafKey);
+  const entries = useMemo(() => {
+    return transactions
+      .filter((tx) => {
+        const pathMatch = normalizePath(tx.to);
+        if (pathMatch) {
+          return pathMatch === normalizedLeafPath;
+        }
+        return trimPubkeyForMatch(tx.to) === normalizedLeafPath;
+      })
+      .sort((a, b) => {
+        const aSeries = a.series ?? 0;
+        const bSeries = b.series ?? 0;
+        if (aSeries !== bSeries) {
+          return bSeries - aSeries;
+        }
+        return b.time - a.time;
+      });
+  }, [normalizedLeafPath, transactions]);
+
+  if (!entries.length) {
+    return null;
+  }
+
+  return (
+    <div style={{ marginTop: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <strong>Leaf sub-feed</strong>
+        <IonButton size="small" fill="clear" onClick={() => onClose()}>
+          Close
+        </IonButton>
+      </div>
+      <IonList inset={true}>
+        {entries.map((tx, index) => {
+          const memoContent = getMemoContent(tx.memo);
+          const memoIcon = getMemoIcon(memoContent);
+          return (
+            <IonItem
+              key={`${tx.time}-${tx.series ?? 0}-${index}`}
+              button={true}
+              detail={true}
+              onClick={() => onOpen(transactionID(tx))}
+            >
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 2, overflow: 'hidden' }}>
+                <code>{`series ${tx.series ?? 'n/a'} · time ${tx.time}`}</code>
+                <small style={{ opacity: 0.75, overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {memoContent.type === 'text' || memoContent.type === 'empty'
+                    ? memoContent.text
+                    : memoContent.type}
+                </small>
+              </div>
+              {memoIcon && <IonIcon slot="end" icon={memoIcon} />}
+            </IonItem>
+          );
+        })}
+      </IonList>
+    </div>
+  );
+};
 
 const TreeBranch = ({
   branch,
@@ -317,6 +424,7 @@ const TreeBranch = ({
   isRoot = false,
   depth = 0,
   maxVisibleDepth = 1,
+  onLeafSelect,
   onLeafOpen,
 }: {
   branch: TreeNode;
@@ -325,6 +433,7 @@ const TreeBranch = ({
   isRoot?: boolean;
   depth?: number;
   maxVisibleDepth?: number;
+  onLeafSelect?: (pubkey: string) => void;
   onLeafOpen?: (txId: string) => void;
 }) => {
 
@@ -335,6 +444,7 @@ const TreeBranch = ({
   const memoIcon = getMemoIcon(memoContent);
   const isCurrentNodeWithoutMemo = isCurrentNode && memoContent.type === 'empty';
   const isNodeButtonEnabled = !isCurrentNodeWithoutMemo;
+  const isLeaf = branch.children.length === 0;
 
   return (
     <div
@@ -354,6 +464,12 @@ const TreeBranch = ({
           onClick={() => {
             if (!isNodeButtonEnabled) {
               return;
+            }
+            if (isCurrentNode && isLeaf) {
+              if (onLeafSelect) {
+                onLeafSelect(branch.node.pubkey);
+                return;
+              }
             }
             if (isCurrentNode && memoContent) {
               if (onLeafOpen && branch.node.memoTransactionId) {
@@ -396,6 +512,7 @@ const TreeBranch = ({
               currentKey={currentKey}
               depth={depth + 1}
               maxVisibleDepth={maxVisibleDepth}
+              onLeafSelect={onLeafSelect}
               onLeafOpen={onLeafOpen}
             />
           ))}

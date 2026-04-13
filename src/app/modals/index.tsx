@@ -33,6 +33,21 @@ const buildPathSegments = (value: string) => {
   });
 };
 
+const resolveStartHeight = (
+  configuredStartHeight: number,
+  tipHeight?: number,
+) => {
+  if (configuredStartHeight > 0) {
+    return configuredStartHeight;
+  }
+
+  if (tipHeight) {
+    return tipHeight + 1;
+  }
+
+  return 1;
+};
+
 const Explore = () => {
   const {
     graph,
@@ -53,6 +68,7 @@ const Explore = () => {
   const [peekGraphKey, setPeekGraphKey] = useState<string>('/');
   const whichKey = useMemo(() => toDisplayPath(peekGraphKey), [peekGraphKey]);
   const clickableSegments = useMemo(() => buildPathSegments(whichKey), [whichKey]);
+  const isSpatialContext = whichKey.startsWith('/');
 
   const [presentSendModal, dismissSend] = useIonModal(Send, {
     onDismiss: (data: string, role: string) => dismissSend(data, role),
@@ -81,7 +97,14 @@ const Explore = () => {
         setTransactions((previous) =>
           replace ? nextTransactions : [...previous, ...nextTransactions],
         );
-        setCanLoadMore(nextTransactions.length >= transactionRange.limit);
+        const minSeries = nextTransactions.reduce((acc, tx) => {
+          const value = tx.series ?? Number.MAX_SAFE_INTEGER;
+          return Math.min(acc, value);
+        }, Number.MAX_SAFE_INTEGER);
+        const nextCursor = minSeries === Number.MAX_SAFE_INTEGER ? endHeight : minSeries - 1;
+        setFetchStartHeight(nextCursor);
+        const floor = transactionRange.endHeight || 1;
+        setCanLoadMore(nextTransactions.length >= transactionRange.limit && nextCursor >= floor);
       },
       {
         startHeight,
@@ -89,11 +112,16 @@ const Explore = () => {
         limit: transactionRange.limit,
       },
     );
-  }, [navigatorPublicKey, requestPkTransactions, transactionRange.limit]);
+  }, [
+    navigatorPublicKey,
+    requestPkTransactions,
+    transactionRange.endHeight,
+    transactionRange.limit,
+  ]);
 
   useEffect(() => {
     let cleanup = () => {};
-    const timeoutId = window.setTimeout(() => {
+      const timeoutId = window.setTimeout(() => {
       if (!navigatorPublicKey) {
         setGraph(null);
         setTransactions([]);
@@ -101,20 +129,32 @@ const Explore = () => {
         return;
       }
 
-      const latestStartHeight = tipHeader?.header.height
-        ? tipHeader.header.height + 1
-        : transactionRange.startHeight;
-      setFetchStartHeight(latestStartHeight);
+      const initialStartHeight = resolveStartHeight(
+        transactionRange.startHeight,
+        tipHeader?.header.height,
+      );
+      const initialEndHeight = transactionRange.endHeight;
+      setFetchStartHeight(initialStartHeight);
       cleanup =
         requestPkTransactions(
           navigatorPublicKey,
           (transactions) => {
             setTransactions(transactions);
-            setCanLoadMore(transactions.length >= transactionRange.limit);
+            const minSeries = transactions.reduce((acc, tx) => {
+              const value = tx.series ?? Number.MAX_SAFE_INTEGER;
+              return Math.min(acc, value);
+            }, Number.MAX_SAFE_INTEGER);
+            const nextCursor =
+              minSeries === Number.MAX_SAFE_INTEGER ? initialEndHeight : minSeries - 1;
+            setFetchStartHeight(nextCursor);
+            const floor = transactionRange.endHeight || 1;
+            setCanLoadMore(
+              transactions.length >= transactionRange.limit && nextCursor >= floor,
+            );
           },
           {
-            startHeight: latestStartHeight,
-            endHeight: 0,
+            startHeight: initialStartHeight,
+            endHeight: initialEndHeight,
             limit: transactionRange.limit,
           },
         ) ?? cleanup;
@@ -144,11 +184,24 @@ const Explore = () => {
           navigatorPublicKey,
           (transactions) => {
             setTransactions(transactions);
-            setCanLoadMore(transactions.length >= transactionRange.limit);
+            const minSeries = transactions.reduce((acc, tx) => {
+              const value = tx.series ?? Number.MAX_SAFE_INTEGER;
+              return Math.min(acc, value);
+            }, Number.MAX_SAFE_INTEGER);
+            const nextCursor =
+              minSeries === Number.MAX_SAFE_INTEGER ? transactionRange.endHeight : minSeries - 1;
+            setFetchStartHeight(nextCursor);
+            const floor = transactionRange.endHeight || 1;
+            setCanLoadMore(
+              transactions.length >= transactionRange.limit && nextCursor >= floor,
+            );
           },
           {
-            startHeight: tipHeader?.header.height ? tipHeader.header.height + 1 : transactionRange.startHeight,
-            endHeight: 0,
+            startHeight: resolveStartHeight(
+              transactionRange.startHeight,
+              tipHeader?.header.height,
+            ),
+            endHeight: transactionRange.endHeight,
             limit: transactionRange.limit,
           },
         );
@@ -184,11 +237,14 @@ const Explore = () => {
       return;
     }
 
-    const nextEndHeight = fetchStartHeight - 1;
-    const nextStartHeight = Math.max(1, nextEndHeight - transactionRange.limit + 1);
-    setFetchStartHeight(nextStartHeight);
-    fetchTransactions(nextStartHeight, nextEndHeight, false);
-  }, [canLoadMore, fetchStartHeight, fetchTransactions, transactionRange.limit]);
+    const floor = transactionRange.endHeight || 1;
+    const nextStartHeight = fetchStartHeight;
+    if (nextStartHeight < floor) {
+      setCanLoadMore(false);
+      return;
+    }
+    fetchTransactions(nextStartHeight, floor, false);
+  }, [canLoadMore, fetchStartHeight, fetchTransactions, transactionRange.endHeight]);
 
   return (
     <PageShell
@@ -232,19 +288,33 @@ const Explore = () => {
                     ..
                   </button>
                   <code>/</code>
-                  {clickableSegments.map((segment, index) => (
-                    <div key={segment.value} style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
-                      <button type="button" onClick={() => {
-                        setPeekGraphKey(segment.value);
+                  {isSpatialContext ? (
+                    clickableSegments.map((segment, index) => (
+                      <div key={segment.value} style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                        <button type="button" onClick={() => {
+                          setPeekGraphKey(segment.value);
+                          if (mode === 'feed') {
+                            setMode('tree');
+                          }
+                        }} style={{ border: 'none', background: 'transparent', color: 'var(--ion-color-primary)', textDecoration: 'underline' }}>
+                          {segment.label}
+                        </button>
+                        {index < clickableSegments.length - 1 && <code>/</code>}
+                      </div>
+                    ))
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
                         if (mode === 'feed') {
                           setMode('tree');
                         }
-                      }} style={{ border: 'none', background: 'transparent', color: 'var(--ion-color-primary)', textDecoration: 'underline' }}>
-                        {segment.label}
-                      </button>
-                      {index < clickableSegments.length - 1 && <code>/</code>}
-                    </div>
-                  ))}
+                      }}
+                      style={{ border: 'none', background: 'transparent', color: 'var(--ion-color-primary)', textDecoration: 'underline' }}
+                    >
+                      {whichKey}
+                    </button>
+                  )}
                 </div>
               </div>
               {!!graph && (
@@ -254,6 +324,7 @@ const Explore = () => {
                       forKey={whichKey}
                       nodes={graph.nodes ?? []}
                       links={graph.links ?? []}
+                      transactions={transactions}
                       setForKey={setPeekGraphKey}
                       onLeafOpen={(txId) => {
                         setMode('feed');
@@ -269,12 +340,21 @@ const Explore = () => {
                       focusTransactionId={focusTransactionId}
                       onSwitchNavigator={(nextKey) => {
                         setNavigatorPublicKey(nextKey);
-                        setPeekGraphKey('/');
+                        setPeekGraphKey(nextKey);
                         setMode('feed');
                       }}
-                      onActivePathChange={(path) => {
+                      onActiveEntryChange={(context) => {
+                        setFocusTransactionId(null);
+                        if (context.path) {
+                          setPeekGraphKey(context.path);
+                          return;
+                        }
+                        if (context.key) {
+                          setPeekGraphKey(context.key);
+                          return;
+                        }
                         if (mode === 'feed') {
-                          setPeekGraphKey(path);
+                          setPeekGraphKey('/');
                         }
                       }}
                     />

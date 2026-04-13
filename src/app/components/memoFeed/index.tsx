@@ -21,6 +21,14 @@ type FeedEntry = {
   tx: FeedItem;
   kind: 'memo' | 'drill_in' | 'drill_out';
   path: string | null;
+  targetKey: string | null;
+};
+
+export type ActiveFeedEntryContext = {
+  kind: FeedEntry['kind'];
+  path: string | null;
+  key: string | null;
+  txId: string;
 };
 
 const normalizePath = (value?: string) => {
@@ -86,19 +94,23 @@ const buildEntries = (transactions: Transaction[]) => {
   const entries: FeedEntry[] = [];
 
   normalizeFeedTransactions(transactions).forEach((tx) => {
-    entries.push({
-      entryId: `${tx.txId}:memo`,
-      tx,
-      kind: 'memo',
-      path: normalizePath(tx.to),
-    });
+    const destinationPath = normalizePath(tx.to);
 
-    if (!isSpatialKey(tx.to)) {
+    if (destinationPath) {
+      entries.push({
+        entryId: `${tx.txId}:memo`,
+        tx,
+        kind: 'memo',
+        path: destinationPath,
+        targetKey: tx.to,
+      });
+    } else {
       entries.push({
         entryId: `${tx.txId}:drill-in`,
         tx,
         kind: 'drill_in',
         path: null,
+        targetKey: tx.to,
       });
     }
 
@@ -108,6 +120,7 @@ const buildEntries = (transactions: Transaction[]) => {
         tx,
         kind: 'drill_out',
         path: null,
+        targetKey: tx.from,
       });
     }
   });
@@ -121,14 +134,14 @@ const MemoFeed = ({
   onLoadMore,
   focusTransactionId,
   onSwitchNavigator,
-  onActivePathChange,
+  onActiveEntryChange,
 }: {
   transactions: Transaction[];
   canLoadMore: boolean;
   onLoadMore: () => void;
   focusTransactionId?: string | null;
   onSwitchNavigator: (publicKey: string) => void;
-  onActivePathChange: (path: string) => void;
+  onActiveEntryChange: (context: ActiveFeedEntryContext) => void;
 }) => {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const loadRequestedForLengthRef = useRef<number>(-1);
@@ -148,10 +161,15 @@ const MemoFeed = ({
 
   useEffect(() => {
     const activeEntry = feedEntries[activeIndex];
-    if (activeEntry?.path) {
-      onActivePathChange(activeEntry.path);
+    if (activeEntry) {
+      onActiveEntryChange({
+        kind: activeEntry.kind,
+        path: activeEntry.path,
+        key: activeEntry.targetKey,
+        txId: activeEntry.tx.txId,
+      });
     }
-  }, [activeIndex, feedEntries, onActivePathChange]);
+  }, [activeIndex, feedEntries, onActiveEntryChange]);
 
   useEffect(() => {
     if (!focusTransactionId || !scrollRef.current) {
@@ -226,7 +244,12 @@ const MemoFeed = ({
                 {entry.kind === 'drill_in' && (
                   <>
                     <IonText>
-                      <p style={{ marginTop: 0 }}>Drill-in entry: switch to destination navigator key.</p>
+                      <p style={{ marginTop: 0 }}>
+                        Drill-in entry: switch to destination navigator key
+                        {' '}
+                        <code>{tx.to}</code>
+                        .
+                      </p>
                     </IonText>
                     <IonButton size="small" fill="outline" onClick={() => onSwitchNavigator(tx.to)}>
                       Drill in
@@ -237,7 +260,12 @@ const MemoFeed = ({
                 {entry.kind === 'drill_out' && (
                   <>
                     <IonText>
-                      <p style={{ marginTop: 0 }}>Drill-out entry: switch to source navigator key.</p>
+                      <p style={{ marginTop: 0 }}>
+                        Drill-out entry: switch to source navigator key
+                        {' '}
+                        <code>{tx.from}</code>
+                        .
+                      </p>
                     </IonText>
                     <IonButton
                       size="small"
