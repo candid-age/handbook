@@ -21,6 +21,7 @@ import { useContext, useMemo, useState } from 'react';
 import { AppContext } from '../../utils/appContext';
 
 const CANDID_REEL_PUBLIC_KEY = 'GFyHkcnYf0+Og/DuhzXAFN0J5aOH+0k9RaJ58lOy5Mg=';
+const CANDID_LOG_PUBLIC_KEY = '13N00JsrSlMKF6T74CpNC65k4ETENYBuh2yM7r645VQ=';
 const DEFAULT_WINDOW_SIZE = 20_000;
 
 const Navigator = ({
@@ -118,6 +119,15 @@ const Navigator = ({
                   <IonIcon slot="start" icon={logoYoutube} />
                   Candid-Reel
                 </IonButton>
+                <IonButton
+                  slot="end"
+                  fill="clear"
+                  size="small"
+                  onClick={() => setPublicKey(CANDID_LOG_PUBLIC_KEY)}
+                >
+                  <IonIcon slot="start" icon={logoYoutube} />
+                  Candid-Log
+                </IonButton>
               </IonItem>
               <IonItem>
                 <IonLabel position="stacked">Start height</IonLabel>
@@ -127,6 +137,14 @@ const Navigator = ({
                   value={startHeight}
                   onIonInput={(event) => setStartHeight(`${event.detail.value ?? 0}`)}
                 />
+                <IonButton
+                  slot="end"
+                  fill="clear"
+                  size="small"
+                  onClick={() => setStartHeight(`${maxHeight}`)}
+                >
+                  Tip
+                </IonButton>
               </IonItem>
               <IonItem>
                 <IonLabel position="stacked">End height</IonLabel>
@@ -140,12 +158,9 @@ const Navigator = ({
                   slot="end"
                   fill="clear"
                   size="small"
-                  onClick={() => {
-                    setStartHeight(`${maxHeight}`);
-                    setEndHeight(`${defaultEndHeight}`);
-                  }}
+                  onClick={() => setEndHeight(`${defaultEndHeight}`)}
                 >
-                  Tip - 20k
+                  -20k
                 </IonButton>
               </IonItem>
               <IonItem>
