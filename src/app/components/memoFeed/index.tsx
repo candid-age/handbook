@@ -128,7 +128,7 @@ const MemoFeed = ({
   onLoadMore: () => void;
   focusTransactionId?: string | null;
   onSwitchNavigator: (publicKey: string) => void;
-  onActivePathChange: (path: string) => void;
+  onActivePathChange: (path: string | null) => void;
 }) => {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const loadRequestedForLengthRef = useRef<number>(-1);
@@ -148,9 +148,7 @@ const MemoFeed = ({
 
   useEffect(() => {
     const activeEntry = feedEntries[activeIndex];
-    if (activeEntry?.path) {
-      onActivePathChange(activeEntry.path);
-    }
+    onActivePathChange(activeEntry?.path ?? null);
   }, [activeIndex, feedEntries, onActivePathChange]);
 
   useEffect(() => {

@@ -274,7 +274,7 @@ const Explore = () => {
                       }}
                       onActivePathChange={(path) => {
                         if (mode === 'feed') {
-                          setPeekGraphKey(path);
+                          setPeekGraphKey(path ?? '/');
                         }
                       }}
                     />
